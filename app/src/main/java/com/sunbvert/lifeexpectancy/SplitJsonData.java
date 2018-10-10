@@ -1,5 +1,6 @@
 package com.sunbvert.lifeexpectancy;
 
+import android.content.Intent;
 import android.os.AsyncTask;
 
 import java.util.ArrayList;
@@ -10,6 +11,11 @@ public class SplitJsonData extends AsyncTask<LifeExpectancyValues, Integer, Life
     @Override
     protected LifeExpValuesForPlotting doInBackground(LifeExpectancyValues... lifeExpectancyValues) {
         return splitValues(lifeExpectancyValues[0]);
+    }
+
+    @Override
+    protected void onPostExecute(LifeExpValuesForPlotting result){
+        //Intent intent = new Intent(this, DisplayData.class);
     }
 
     private LifeExpValuesForPlotting splitValues(LifeExpectancyValues values){
