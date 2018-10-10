@@ -2,7 +2,7 @@ package com.sunbvert.lifeexpectancy;
 
 public class LifeExpValuesForPlotting {
     public static int valueSize = 5;
-    static String valueFormat = "[815,34.05,351014,\"Australia\",1800]";
+    //static String valueFormat = "[815,34.05,351014,\"Australia\",1800]";
 
     public int[] gdp;
     public double[] averageLifeTime;
