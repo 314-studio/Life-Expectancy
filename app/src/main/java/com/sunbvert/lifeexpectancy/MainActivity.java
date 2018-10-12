@@ -42,8 +42,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
                 //只有一个文件，所以无需判断到底选取了哪个文件
-                Intent displayData = new Intent(MainActivity.this, DisplayData.class);
-                startActivity(displayData);
+                Intent showMapChart = new Intent(MainActivity.this, MapActivity.class);
+                startActivity(showMapChart);
             }
         });
     }
