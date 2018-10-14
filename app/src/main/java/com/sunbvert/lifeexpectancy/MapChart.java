@@ -5,13 +5,16 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.support.annotation.ColorInt;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.JsonReader;
 import android.util.Log;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
@@ -27,14 +30,18 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     static String TAG = "地图图表";
     static String FILE_NAME = "relative-pos.json";
     static String WORLD_MAP = "World Map";
+    static int DURATION_ONE_YEAR = 500;
 
     LifeExpValuesForPlotting plottingData;
+    LifeExpectancyValues rawData;
 
     Context context;
 
     Map<String, Bitmap> countriesBitmap;
     Map<String, double[]> countriesPos;
     Map<String, Bitmap> scaledCountriesBitmaps;
+
+    int[] gdpInColor;
 
     private SurfaceHolder mHolder;
     private Canvas mCanvas;
@@ -165,6 +172,11 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     public void setData(LifeExpValuesForPlotting plottingData) {
         this.plottingData = plottingData;
+        this.gdpInColor = constructGdpColorArray(plottingData.gdp, Color.RED, Color.GREEN);
+    }
+
+    public void setRawData(LifeExpectancyValues rawData){
+        this.rawData = rawData;
     }
 
     private JsonReader getReader(String fileName) {
@@ -208,9 +220,15 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
+        /*
         mCanvas = holder.lockCanvas();
-        drawBackground(mCanvas);
+        mCanvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, new Paint());
         holder.unlockCanvasAndPost(mCanvas);
+        */
+
+        mIsDrawing = true;
+        new Thread(this).start();
+
     }
 
     @Override
@@ -220,11 +238,128 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-
+        mIsDrawing = false;
     }
+
 
     @Override
     public void run() {
+        int t = 0;
 
+        while (mIsDrawing){
+            long startTime = System.currentTimeMillis();
+
+            if (rawData != null) {
+                draw(rawData.timeLine.get(t));
+                t++;
+
+                if (t == rawData.timeLine.size() - 1) {
+                    t = 0;
+                }
+            }
+
+            long endTime = System.currentTimeMillis();
+            int diffTime = (int)(endTime - startTime);
+
+            while(diffTime <= DURATION_ONE_YEAR){
+                diffTime = (int)(System.currentTimeMillis() - startTime);
+                Thread.yield();
+            }
+        }
+    }
+
+    private void draw(int year){
+        try {
+            mCanvas = mHolder.lockCanvas();
+            //测试先画某一年的情况
+            drawSingleFrame(mCanvas, year);
+        }catch (Exception e){
+            Log.e(TAG, "绘制线程出错：", e);
+        }finally {
+            if (mCanvas != null){
+                mHolder.unlockCanvasAndPost(mCanvas);
+            }
+        }
+
+    }
+
+    private void drawSingleFrame(Canvas canvas, int year){
+        canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, new Paint());
+        for(int i = 0; i < plottingData.gdp.length; i++){
+            if (plottingData.investigateYear[i] == year){
+                String countryName = plottingData.counties[i];
+                Bitmap countryBitmap = scaledCountriesBitmaps.get(countryName);
+                Bitmap coloredBitmap = changeBitmapColor(countryBitmap, gdpInColor[i]);
+
+                int worldMapWith = scaledCountriesBitmaps.get(WORLD_MAP).getWidth();
+                int worldMapHeight = scaledCountriesBitmaps.get(WORLD_MAP).getHeight();
+
+                if (coloredBitmap != null) {
+                    canvas.drawBitmap(coloredBitmap,
+                            (float) countriesPos.get(countryName)[0] * worldMapWith,
+                            (float) countriesPos.get(countryName)[1] * worldMapHeight,
+                            new Paint());
+                }
+            }
+        }
+        //todo: 测试代码，该函数只执行一次
+    }
+
+    private int[] constructGdpColorArray(int[] gdp, @ColorInt int startColor, @ColorInt int endColor){
+        int max = 0;
+        int min = gdp[0];
+
+        for (int i: gdp) {
+            if (i > max){
+                max = i;
+            }
+            if (i < min){
+                min = i;
+            }
+        }
+
+        int highestDiff = max - min;
+        int[] gdpInColor = new int[gdp.length];
+
+        for (int j = 0; j < gdp.length; j++) {
+            float fraction = (float) gdp[j] / highestDiff;
+            gdpInColor[j] = getColorGradient(fraction, startColor, endColor);
+        }
+
+        return gdpInColor;
+    }
+
+    private Bitmap changeBitmapColor(Bitmap inBitmap, Integer dstColor){
+        if (inBitmap == null) {
+            return null;
+        }
+
+        Bitmap outBitmap = Bitmap.createBitmap (inBitmap.getWidth(), inBitmap.getHeight() , inBitmap.getConfig());
+        Canvas canvas = new Canvas(outBitmap);
+
+        Paint paint = new Paint();
+        paint.setColorFilter( new PorterDuffColorFilter(dstColor, PorterDuff.Mode.SRC_ATOP));
+
+        canvas.drawBitmap(inBitmap , 0, 0, paint) ;
+        return outBitmap ;
+    }
+
+    private @ColorInt Integer getColorGradient(float fraction, Integer startColor, Integer endColor){
+        int startInt = startColor;
+        int startA = (startInt >> 24) & 0xff;
+        int startR = (startInt >> 16) & 0xff;
+        int startG = (startInt >> 8) & 0xff;
+        int startB = startInt & 0xff;
+
+        int endInt = endColor;
+        int endA = (endInt >> 24) & 0xff;
+        int endR = (endInt >> 16) & 0xff;
+        int endG = (endInt >> 8) & 0xff;
+        int endB = endInt & 0xff;
+
+        return (int) ((startA + (int) (fraction * (endA - startA))) << 24)
+                | (int) ((startR + (int) (fraction * (endR - startR))) << 16)
+                | (int) ((startG + (int) (fraction * (endG - startG))) << 8)
+                | (int) ((startB + (int) (fraction * (endB - startB))));
     }
 }
