@@ -15,6 +15,7 @@ import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.JsonReader;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.WindowManager;
@@ -30,7 +31,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     static String TAG = "地图图表";
     static String FILE_NAME = "relative-pos.json";
     static String WORLD_MAP = "World Map";
-    static int DURATION_ONE_YEAR = 500;
+    static int DURATION_ONE_YEAR = 30;
 
     LifeExpValuesForPlotting plottingData;
     LifeExpectancyValues rawData;
@@ -223,13 +224,28 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         return relativePos;
     }
 
+
+    //定义一些经常用到的画笔
+    Paint defaultPaint;
+    Paint textPaint;
+    Paint clearPaint;
+
+    static int margin = 100;
+    static int numOfYear = 5;
+    static int TEXT_SIZE = 20;
+    int currentSeleteYear = 2010;
+    int interval;
+    boolean isTouched = false;
+
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        /*
-        mCanvas = holder.lockCanvas();
-        mCanvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, new Paint());
-        holder.unlockCanvasAndPost(mCanvas);
-        */
+        defaultPaint = new Paint();
+        textPaint = new Paint();
+        textPaint.setTextSize(TEXT_SIZE);
+        interval = (bgWidth - margin * 2) / (numOfYear - 1);
+
+        clearPaint = new Paint();
+        clearPaint.setColor(Color.WHITE);
 
         mIsDrawing = true;
         new Thread(this).start();
@@ -246,7 +262,52 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         mIsDrawing = false;
     }
 
-    int t = 0;
+    int rulerTouchBeginX = 0;
+    int rulerTouchBeginY = 0;
+    int lastMoveX = 0;
+    int lastMoveY = 0;
+    int offset = 0;
+    long rulerTouchBeginTime = 0;
+    boolean rulerTouched = false;
+    float rulerTouchEndSpeed = 0;
+    @Override
+    public boolean onTouchEvent(MotionEvent event){
+        int x = (int) event.getX();
+        int y = (int) event.getY();
+
+        switch (event.getAction()){
+            case MotionEvent.ACTION_DOWN:
+                if (y > bgHeight && y < bgHeight + 3 * TEXT_SIZE){
+                    rulerTouched = true;
+                    rulerTouchBeginX = x;
+                    rulerTouchBeginY = y;
+                    rulerTouchBeginTime = System.currentTimeMillis();
+                }
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (rulerTouched){
+                    if (lastMoveX != 0){
+                        offset += x - lastMoveX;
+                        //Log.d(TAG, "触摸offset: " + offset);
+                    }
+                }
+
+                lastMoveX = x;
+                lastMoveY = y;
+                break;
+            case MotionEvent.ACTION_UP:
+                if (rulerTouched){
+                    rulerTouched = false;
+                    rulerTouchEndSpeed = (float) (y - rulerTouchBeginY) * 1000 /
+                            (rulerTouchBeginTime - System.currentTimeMillis());
+                    offset = 0;
+                }
+                break;
+        }
+        return true;
+    }
+
+    int t = 0;   //当前选中国家在timeline中的索引
     @Override
     public void run() {
 
@@ -255,11 +316,11 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
             if (rawData != null) {
                 draw(rawData.timeLine.get(t));
-                t++;
+                //t++;
 
                 if (t == rawData.timeLine.size() - 1) {
                     t = 0;
-                    mIsDrawing = false;
+                    //mIsDrawing = false;
                 }
             }
 
@@ -289,43 +350,44 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     }
 
+    //画出每一帧的国家颜色变化
     private void drawSingleFrame(Canvas canvas, int year){
-        canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, new Paint());
+        canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, defaultPaint);
         for(int i = 0; i < plottingData.gdp.length; i++){
             if (plottingData.investigateYear[i] == year){
                 String countryName = plottingData.counties[i];
                 Bitmap countryBitmap = scaledCountriesBitmaps.get(countryName);
                 Bitmap coloredBitmap = changeBitmapColor(countryBitmap, gdpInColor[i]);
 
-                int worldMapWith = scaledCountriesBitmaps.get(WORLD_MAP).getWidth();
-                int worldMapHeight = scaledCountriesBitmaps.get(WORLD_MAP).getHeight();
-
                 if (coloredBitmap != null) {
                     canvas.drawBitmap(coloredBitmap,
-                            (float) countriesPos.get(countryName)[0] * worldMapWith,
-                            (float) countriesPos.get(countryName)[1] * worldMapHeight,
+                            (float) countriesPos.get(countryName)[0] * bgWidth,
+                            (float) countriesPos.get(countryName)[1] * bgHeight,
                             new Paint());
                 }
             }
         }
     }
 
-    static int margin = 100;
-    static int numOfYear = 5;
-    static int TEXT_SIZE = 20;
-    int currentSeleteYear = 2010;
+    //画出每一帧年份标尺的变化
     private void drawYearRegulator(Canvas canvas){
+        canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, defaultPaint);
+        canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
+        //int index = rawData.timeLine.indexOf(year);
 
-        int interval = (bgWidth - margin * 2) / (numOfYear - 1);
-        canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, new Paint());
-        Paint textPaint = new Paint();
-        textPaint.setTextSize(TEXT_SIZE);
-        Paint clearPaint = new Paint();
-        clearPaint.setColor(Color.WHITE);
-        for(int i = 0; i < numOfYear; i++){
-            canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
-            canvas.drawText(String.valueOf(plottingData.investigateYear[i]),
-                    margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
+        //t是当前timeLine中选中过国家的索引，t-2>=0可以确保标尺在前两格没有数据时也可以显示
+        if (t - 2 >= 0) {
+            int j = t - 2;
+            for (int i = 0; i < numOfYear; i++) {
+                canvas.drawText(String.valueOf(rawData.timeLine.get(j)),
+                        margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
+                j++;
+            }
+        }else{
+            for (int i = 0; i < numOfYear; i++) {
+                canvas.drawText(String.valueOf(rawData.timeLine.get(i)),
+                        margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
+            }
         }
         canvas.drawLine(margin, bgHeight + TEXT_SIZE * 3,
                 bgWidth - margin, bgHeight + TEXT_SIZE * 3, new Paint());
@@ -338,9 +400,20 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     boolean beginAnimation = false;
 
     private int animateRulerOffset(){
-        return (int) velocity--;
+        if (rulerTouched){
+            return offset;
+        }else {
+            if (offset != 0) {
+                if (offset > interval){
+                    //t++;
+                    //offset -= interval;
+                }
+            }
+        }
+        return 0;
     }
 
+    //将gdp数据分析为颜色，然后将颜色存放在一个和gdp一样大小的数组中并一一对应
     private int[] constructGdpColorArray(int[] gdp, @ColorInt int startColor, @ColorInt int endColor){
         int max = 0;
         int min = gdp[0];
@@ -365,6 +438,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         return gdpInColor;
     }
 
+    //将给定的Bitmap的不透明区域填充为给定的颜色
     private Bitmap changeBitmapColor(Bitmap inBitmap, Integer dstColor){
         if (inBitmap == null) {
             return null;
@@ -380,6 +454,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         return outBitmap ;
     }
 
+    //该函数从给定的起始和终止颜色中按百分比选择中间的一个过渡颜色
     private @ColorInt Integer getColorGradient(float fraction, Integer startColor, Integer endColor){
         int startInt = startColor;
         int startA = (startInt >> 24) & 0xff;
