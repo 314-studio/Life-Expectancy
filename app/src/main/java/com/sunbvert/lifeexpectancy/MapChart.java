@@ -47,6 +47,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     private Canvas mCanvas;
     private boolean mIsDrawing;
 
+    int bgWidth;
+    int bgHeight;
 
     public MapChart(Context context) {
         super(context);
@@ -90,6 +92,9 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         Matrix scaler = new Matrix();
         scaler.postScale(scale, scale);
         scaledCountriesBitmaps = scaleCountriesBitmap(countriesBitmap, scaler);
+        Bitmap bg = scaledCountriesBitmaps.get(WORLD_MAP);
+        this.bgWidth = bg.getWidth();
+        this.bgHeight = bg.getHeight();
     }
 
     private void drawBackground(Canvas canvas){
@@ -241,10 +246,9 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         mIsDrawing = false;
     }
 
-
+    int t = 0;
     @Override
     public void run() {
-        int t = 0;
 
         while (mIsDrawing){
             long startTime = System.currentTimeMillis();
@@ -255,6 +259,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
                 if (t == rawData.timeLine.size() - 1) {
                     t = 0;
+                    mIsDrawing = false;
                 }
             }
 
@@ -273,6 +278,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             mCanvas = mHolder.lockCanvas();
             //测试先画某一年的情况
             drawSingleFrame(mCanvas, year);
+            drawYearRegulator(mCanvas);
         }catch (Exception e){
             Log.e(TAG, "绘制线程出错：", e);
         }finally {
@@ -302,7 +308,37 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                 }
             }
         }
-        //todo: 测试代码，该函数只执行一次
+    }
+
+    static int margin = 100;
+    static int numOfYear = 5;
+    static int TEXT_SIZE = 20;
+    int currentSeleteYear = 2010;
+    private void drawYearRegulator(Canvas canvas){
+
+        int interval = (bgWidth - margin * 2) / (numOfYear - 1);
+        canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, new Paint());
+        Paint textPaint = new Paint();
+        textPaint.setTextSize(TEXT_SIZE);
+        Paint clearPaint = new Paint();
+        clearPaint.setColor(Color.WHITE);
+        for(int i = 0; i < numOfYear; i++){
+            canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
+            canvas.drawText(String.valueOf(plottingData.investigateYear[i]),
+                    margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
+        }
+        canvas.drawLine(margin, bgHeight + TEXT_SIZE * 3,
+                bgWidth - margin, bgHeight + TEXT_SIZE * 3, new Paint());
+    }
+
+    //todo: put these values into xml
+    static float accelerationClose = 1;
+    static float friction = 1;
+    float velocity = 0;
+    boolean beginAnimation = false;
+
+    private int animateRulerOffset(){
+        return (int) velocity--;
     }
 
     private int[] constructGdpColorArray(int[] gdp, @ColorInt int startColor, @ColorInt int endColor){
