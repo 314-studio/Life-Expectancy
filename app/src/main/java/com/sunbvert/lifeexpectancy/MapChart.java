@@ -231,9 +231,9 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     Paint clearPaint;
 
     static int margin = 100;
-    static int numOfYear = 6;   //同时在年份选择器上绘制的年份
+    static int numOfYear = 5;   //同时在年份选择器上绘制的年份
     static int TEXT_SIZE = 20;
-    int currentSeleteYear = 2010;
+    int currentSeleteYearIndex = 0;
     int interval;
     boolean isTouched = false;
 
@@ -317,17 +317,16 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         while (mIsDrawing){
             long startTime = System.currentTimeMillis();
 
-            //线程开启是还没有rawData数据，所以需要判断rawData是否为空
+            //线程开启时还没有rawData数据，所以需要判断rawData是否为空
             if (rawData != null) {
                 //todo：如果点击播放的话
 
                 //如果控制用户选择年份t的话
-                draw(rawData.timeLine.get(t));
-                //t++;
-
-                if (t == rawData.timeLine.size() - 1) {
-                    t = 0;
+                if (t > rawData.timeLine.size() - 1) {
+                    t = rawData.timeLine.size() - 1;
                 }
+                draw(rawData.timeLine.get(t));
+
             }
 
             long endTime = System.currentTimeMillis();
@@ -357,7 +356,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     }
 
-    //画出每一帧的国家颜色变化
+     //画出每一帧的国家颜色变化
     private void drawSingleFrame(Canvas canvas, int year){
         canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, defaultPaint);
         for(int i = 0; i < plottingData.gdp.length; i++){
@@ -376,22 +375,22 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         }
     }
 
+    int numOfYearToDisplay = numOfYear;
     //画出每一帧年份标尺的变化
     private void drawYearRegulator(Canvas canvas){
         canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, defaultPaint);
         canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
-        //int index = rawData.timeLine.indexOf(year);
 
         //t是当前timeLine中选中过国家的索引，t-2>=0可以确保标尺在前两格没有数据时也可以显示
         if (t - 2 >= 0) {
             int j = t - 2;
-            for (int i = 0; i < numOfYear; i++) {
+            for (int i = 0; i < numOfYearToDisplay; i++) {
                 canvas.drawText(String.valueOf(rawData.timeLine.get(j)),
                         margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
                 j++;
             }
         }else{
-            for (int i = 0; i < numOfYear; i++) {
+            for (int i = 0; i < numOfYearToDisplay; i++) {
                 canvas.drawText(String.valueOf(rawData.timeLine.get(i)),
                         margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
             }
@@ -410,20 +409,20 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         if (rulerTouched){
             if (offset > 0){
                 if (offset > interval){
-                    t++;
+                    //实时根据offset计算需要显示年份的数量
+                    numOfYearToDisplay = numOfYear + offset / interval;
+                    currentSeleteYearIndex = t + offset / interval;
                 }
             }else {
                 if (-offset > interval){
-                    t--;
+                    numOfYearToDisplay = numOfYear - offset / interval;
+                    currentSeleteYearIndex = t + offset / interval;
                 }
             }
             return offset;
         }else {
             if (offset != 0) {
-                if (offset > interval){
-                    //t++;
-                    //offset -= interval;
-                }
+                offset = 0;
             }
         }
         return 0;
