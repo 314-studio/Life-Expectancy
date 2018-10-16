@@ -231,7 +231,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     Paint clearPaint;
 
     static int margin = 100;
-    static int numOfYear = 5;
+    static int numOfYear = 6;   //同时在年份选择器上绘制的年份
     static int TEXT_SIZE = 20;
     int currentSeleteYear = 2010;
     int interval;
@@ -300,7 +300,10 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                     rulerTouched = false;
                     rulerTouchEndSpeed = (float) (y - rulerTouchBeginY) * 1000 /
                             (rulerTouchBeginTime - System.currentTimeMillis());
-                    offset = 0;
+                    //offset = 0;
+
+                    lastMoveX = 0;
+                    lastMoveY = 0;
                 }
                 break;
         }
@@ -314,19 +317,23 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         while (mIsDrawing){
             long startTime = System.currentTimeMillis();
 
+            //线程开启是还没有rawData数据，所以需要判断rawData是否为空
             if (rawData != null) {
+                //todo：如果点击播放的话
+
+                //如果控制用户选择年份t的话
                 draw(rawData.timeLine.get(t));
                 //t++;
 
                 if (t == rawData.timeLine.size() - 1) {
                     t = 0;
-                    //mIsDrawing = false;
                 }
             }
 
             long endTime = System.currentTimeMillis();
             int diffTime = (int)(endTime - startTime);
 
+            //控制画面刷新率
             while(diffTime <= DURATION_ONE_YEAR){
                 diffTime = (int)(System.currentTimeMillis() - startTime);
                 Thread.yield();
@@ -401,6 +408,15 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     private int animateRulerOffset(){
         if (rulerTouched){
+            if (offset > 0){
+                if (offset > interval){
+                    t++;
+                }
+            }else {
+                if (-offset > interval){
+                    t--;
+                }
+            }
             return offset;
         }else {
             if (offset != 0) {
