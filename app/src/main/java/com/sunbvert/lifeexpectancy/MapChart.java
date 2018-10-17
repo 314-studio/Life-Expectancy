@@ -262,8 +262,6 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         mIsDrawing = false;
     }
 
-    int rulerTouchBeginX = 0;
-    int rulerTouchBeginY = 0;
     int lastMoveX = 0;
     int lastMoveY = 0;
     int offset = 0;
@@ -279,10 +277,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             case MotionEvent.ACTION_DOWN:
                 if (y > bgHeight && y < bgHeight + 3 * TEXT_SIZE){
                     rulerTouched = true;
-                    rulerTouchBeginX = x;
-                    rulerTouchBeginY = y;
-                    rulerTouchBeginTime = System.currentTimeMillis();
                 }
+                Log.d(TAG, "开始响应触摸事件");
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (rulerTouched){
@@ -294,16 +290,23 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
                 lastMoveX = x;
                 lastMoveY = y;
+                rulerTouchBeginTime = System.currentTimeMillis();
+                //Log.d(TAG, "上次触摸X位置：" + lastMoveX + " 当前触摸X位置：" + x + " 当前offset：" + offset);
                 break;
             case MotionEvent.ACTION_UP:
                 if (rulerTouched){
                     rulerTouched = false;
-                    rulerTouchEndSpeed = (float) (y - rulerTouchBeginY) * 1000 /
-                            (rulerTouchBeginTime - System.currentTimeMillis());
+                    rulerTouchEndSpeed = (float) (x - lastMoveX) /
+                            (System.currentTimeMillis() - rulerTouchBeginTime);
                     //offset = 0;
+                    Log.d(TAG, "触摸事件结束，当前标尺年份：" + t + " 当前绘图年份：" + currentSeleteYearIndex
+                            + " 结束速度：" + rulerTouchEndSpeed);
+                    Log.d(TAG, "当前X坐标：" + x + " 前一次的X坐标：" + lastMoveX + " 经过时间：" + (rulerTouchBeginTime - System.currentTimeMillis()));
 
                     lastMoveX = 0;
                     lastMoveY = 0;
+
+                    t = currentSeleteYearIndex;
                 }
                 break;
         }
@@ -318,14 +321,18 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             long startTime = System.currentTimeMillis();
 
             //线程开启时还没有rawData数据，所以需要判断rawData是否为空
-            if (rawData != null) {
+            if (rawData != null && plottingData != null) {
                 //todo：如果点击播放的话
 
                 //如果控制用户选择年份t的话
                 if (t > rawData.timeLine.size() - 1) {
                     t = rawData.timeLine.size() - 1;
                 }
-                draw(rawData.timeLine.get(t));
+
+                if (currentSeleteYearIndex == -1){
+                    Log.d(TAG, "array out of bounds");
+                }
+                draw(rawData.timeLine.get(currentSeleteYearIndex));
 
             }
 
@@ -384,10 +391,20 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         //t是当前timeLine中选中过国家的索引，t-2>=0可以确保标尺在前两格没有数据时也可以显示
         if (t - 2 >= 0) {
             int j = t - 2;
-            for (int i = 0; i < numOfYearToDisplay; i++) {
-                canvas.drawText(String.valueOf(rawData.timeLine.get(j)),
-                        margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
-                j++;
+            //如果偏移量是负的，说明年份在往前走，则要向后添加年份
+            if (offset <= 0) {
+                for (int i = 0; i < numOfYearToDisplay; i++) {
+                    canvas.drawText(String.valueOf(rawData.timeLine.get(j)),
+                            margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
+                    j++;
+                }
+            } else {  //如果偏移量是正的，说明年份在减小，则要向前添加年份
+                //numOfYear是年份标尺能同时显示的年份数，numOfYearToDisplay是将要显示的年份数
+                for (int i = numOfYear-numOfYearToDisplay; i < numOfYear; i++) {
+                    canvas.drawText(String.valueOf(rawData.timeLine.get(j + numOfYear- numOfYearToDisplay)),
+                            margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
+                    j++;
+                }
             }
         }else{
             for (int i = 0; i < numOfYearToDisplay; i++) {
@@ -405,27 +422,34 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     float velocity = 0;
     boolean beginAnimation = false;
 
+
     private int animateRulerOffset(){
-        if (rulerTouched){
+        if (rulerTouched || beginAnimation){
             if (offset > 0){
                 if (offset > interval){
                     //实时根据offset计算需要显示年份的数量
                     numOfYearToDisplay = numOfYear + offset / interval;
-                    currentSeleteYearIndex = t + offset / interval;
+                    currentSeleteYearIndex = t - offset / interval;
                 }
             }else {
                 if (-offset > interval){
                     numOfYearToDisplay = numOfYear - offset / interval;
-                    currentSeleteYearIndex = t + offset / interval;
+                    currentSeleteYearIndex = t - offset / interval;
                 }
             }
-            return offset;
-        }else {
-            if (offset != 0) {
-                offset = 0;
+        }
+        if (!rulerTouched){
+            if (offset != 0 && !beginAnimation) {
+                beginAnimation = true;
+            }
+            if (beginAnimation){
+                offset -= rulerTouchEndSpeed * DURATION_ONE_YEAR;
+                if (rulerTouchEndSpeed > 0){
+                    //rulerTouchEndSpeed -= friction * DURATION_ONE_YEAR;
+                }
             }
         }
-        return 0;
+        return offset;
     }
 
     //将gdp数据分析为颜色，然后将颜色存放在一个和gdp一样大小的数组中并一一对应
