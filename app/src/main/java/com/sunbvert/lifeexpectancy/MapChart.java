@@ -51,6 +51,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     int bgWidth;
     int bgHeight;
 
+    int horizontalOffset = 0;
+
     public MapChart(Context context) {
         super(context);
         this.context = context;
@@ -89,28 +91,24 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         countriesBitmap = loadCountriesBitmap();
         countriesPos = loadRelativePos(getReader(FILE_NAME));
 
-        float scale = (float) displayMetrics.widthPixels / countriesBitmap.get(WORLD_MAP).getWidth();
         Matrix scaler = new Matrix();
-        scaler.postScale(scale, scale);
+        //根据屏幕宽和高决定缩放比例填充屏幕
+        if (displayMetrics.heightPixels - displayMetrics.widthPixels > 0){
+            float scale = (float) displayMetrics.widthPixels / countriesBitmap.get(WORLD_MAP).getWidth();
+            scaler.postScale(scale, scale);
+            horizontalOffset = 0;
+        }else {
+            float scale = (float) (displayMetrics.heightPixels - 9 * TEXT_SIZE) / countriesBitmap.get(WORLD_MAP).getHeight();
+            scaler.postScale(scale, scale);
+        }
+
         scaledCountriesBitmaps = scaleCountriesBitmap(countriesBitmap, scaler);
         Bitmap bg = scaledCountriesBitmaps.get(WORLD_MAP);
         this.bgWidth = bg.getWidth();
         this.bgHeight = bg.getHeight();
-    }
 
-    private void drawBackground(Canvas canvas){
-        canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, new Paint());
-
-        int worldMapWith = scaledCountriesBitmaps.get(WORLD_MAP).getWidth();
-        int worldMapHeight = scaledCountriesBitmaps.get(WORLD_MAP).getHeight();
-
-        for (String key: scaledCountriesBitmaps.keySet()){
-            if (!key.equals(WORLD_MAP)) {
-                canvas.drawBitmap(scaledCountriesBitmaps.get(key),
-                        (float) countriesPos.get(key)[0] * worldMapWith,
-                        (float) countriesPos.get(key)[1] * worldMapHeight,
-                        new Paint());
-            }
+        if (displayMetrics.heightPixels - displayMetrics.widthPixels < 0) {
+            horizontalOffset = displayMetrics.widthPixels / 2 - bgWidth / 2;
         }
     }
 
@@ -189,7 +187,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         for (int i = 0; i < yearsInRegulator.length; i++){
             yearsInRegulator[i] = rawData.timeLine.get(i);
         }
-        currentSeleteYearIndex = 3;
+        currentSelectedYearIndex = 3;
     }
 
     private JsonReader getReader(String fileName) {
@@ -234,22 +232,32 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     //定义一些经常用到的画笔
     Paint defaultPaint;
-    Paint textPaint;
+    Paint[] textPaint;
     Paint clearPaint;
 
     static int margin = 100;
     static int numOfYear = 5;   //同时在年份选择器上绘制的年份
     static int TEXT_SIZE = 20;
     int[] yearsInRegulator;
-    int currentSeleteYearIndex = 0;
+    int currentSelectedYearIndex = 0;
     int interval;
-    boolean isTouched = false;
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         defaultPaint = new Paint();
-        textPaint = new Paint();
-        textPaint.setTextSize(TEXT_SIZE);
+        textPaint = new Paint[numOfYear];
+        //初始化不同大小的字体画笔
+        for (int i = 0; i < (numOfYear / 2) + 1; i++){
+            Paint paint = new Paint();
+            paint.setTextSize(i * 5 + TEXT_SIZE);
+            textPaint[i] = paint;
+        }
+        for (int i = numOfYear - 1; i > numOfYear / 2; i--){
+            Paint paint = new Paint();
+            paint.setTextSize((-i + 4) * 5 + TEXT_SIZE);
+            textPaint[i] = paint;
+        }
+
         interval = (bgWidth - margin * 2) / (numOfYear - 1);
         yearsInRegulator = new int[numOfYear];
 
@@ -263,7 +271,6 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
         mIsDrawing = true;
         new Thread(this).start();
-
     }
 
     @Override
@@ -283,7 +290,6 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     float rulerTouchEndSpeed = 0;
     long lastMoveTime = 0;
     int lastTimeDelay = 0;
-    boolean boundaryReached = false;
     @Override
     public boolean onTouchEvent(MotionEvent event){
         int x = (int) event.getX();
@@ -291,7 +297,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
         switch (event.getAction()){
             case MotionEvent.ACTION_DOWN:
-                if (y > bgHeight && y < bgHeight + 3 * TEXT_SIZE){
+                if (y > bgHeight - 3 * TEXT_SIZE && y < bgHeight + 5 * TEXT_SIZE){
                     rulerTouched = true;
                     lastMoveX = x;
                     lastMoveTime = System.currentTimeMillis();
@@ -303,18 +309,24 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                     offset += x - lastMoveX;
                 }
 
-                lastXDis = x - lastMoveX;
+                lastXDis = x - lastMoveX;   //记录每次移动的距离
                 lastMoveX = x;
-                lastTimeDelay = (int) (System.currentTimeMillis() - lastMoveTime);
+                lastTimeDelay = (int) (System.currentTimeMillis() - lastMoveTime);  //记录每次移动的时间
                 lastMoveTime = System.currentTimeMillis();
-                //Log.d(TAG, "上次触摸X位置：" + lastMoveX + " 当前触摸X位置：" + x + " 当前offset：" + offset);
                 break;
             case MotionEvent.ACTION_UP:
                 if (rulerTouched) {
                     rulerTouched = false;
-                    rulerTouchEndSpeed = (float) lastXDis / lastTimeDelay;
+                    rulerTouchEndSpeed = (float) lastXDis / lastTimeDelay;  //触摸结束后标尺的速度
 
-                    Log.d(TAG, "当前绘图年份：" + currentSeleteYearIndex
+                    //限制标尺的速度，防止产生空白画面
+                    if (rulerTouchEndSpeed > 10){
+                        rulerTouchEndSpeed = 10;
+                    }else if (rulerTouchEndSpeed < -10){
+                        rulerTouchEndSpeed = -10;
+                    }
+
+                    Log.d(TAG, "当前绘图年份：" + currentSelectedYearIndex
                             + " 结束速度：" + rulerTouchEndSpeed + "， 间隔时间：" + lastTimeDelay);
                     Log.d(TAG, " 与上次X的间距：" + lastXDis);
 
@@ -334,23 +346,18 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             //线程开启时还没有rawData数据，所以需要判断rawData是否为空
             if (rawData != null && plottingData != null) {
                 //只有当前选定的年份在安全区域内才作画
-                draw(rawData.timeLine.get(currentSeleteYearIndex));
-                Log.d(TAG, "SeletedYear: " + currentSeleteYearIndex + ", offset: " + offset + ", Speed: " + rulerTouchEndSpeed +  ", rulerTouched: " + rulerTouched);
+                draw(rawData.timeLine.get(currentSelectedYearIndex));
+                Log.d(TAG, "SelectedYear: " + currentSelectedYearIndex + ", offset: " +
+                        offset + ", Speed: " + rulerTouchEndSpeed +  ", rulerTouched: " + rulerTouched);
             }
 
             long endTime = System.currentTimeMillis();
             int diffTime = (int)(endTime - startTime);
 
+            //控制标尺的惯性移动
             if (!rulerTouched){
                 if (rulerTouchEndSpeed != 0) {
                     offset += diffTime * rulerTouchEndSpeed;
-                }
-                //防止用户滑出边界
-                if (currentSeleteYearIndex <= 2 || currentSeleteYearIndex >= timeLineSize - 2) {
-                    if (offset != 0) {
-                        offset = 0;
-                        rulerTouchEndSpeed = 0;
-                    }
                 }
             }
 
@@ -365,7 +372,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     private void draw(int yearIndex){
         try {
             mCanvas = mHolder.lockCanvas();
-            //测试先画某一年的情况
+            mCanvas.drawColor(Color.WHITE);
             drawSingleFrame(mCanvas, yearIndex);
             drawYearRegulator(mCanvas);
         }catch (Exception e){
@@ -380,7 +387,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
      //画出每一帧的国家颜色变化
     private void drawSingleFrame(Canvas canvas, int year){
-        canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), 0, 0, defaultPaint);
+        canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), horizontalOffset, 0, defaultPaint);
         for(int i = 0; i < plottingData.gdp.length; i++){
             if (plottingData.investigateYear[i] == year){
                 String countryName = plottingData.counties[i];
@@ -389,56 +396,83 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
                 if (coloredBitmap != null) {
                     canvas.drawBitmap(coloredBitmap,
-                            (float) countriesPos.get(countryName)[0] * bgWidth,
+                            (float) countriesPos.get(countryName)[0] * bgWidth + horizontalOffset,
                             (float) countriesPos.get(countryName)[1] * bgHeight,
                             new Paint());
                 }
             }
         }
     }
+
+    static float resistance = 0.2f;
     //画出每一帧年份标尺的变化
-    //注意该函数每秒允许30次
+    //注意该函数每秒运行30次
     private void drawYearRegulator(Canvas canvas){
-        if (currentSeleteYearIndex < 2) {
-            currentSeleteYearIndex = 2;
+        //如果超出年份边界的话，重置当前选择的年份，偏移量和速度
+        if (currentSelectedYearIndex < 2) {
+            currentSelectedYearIndex = 2;
             offset = 0;
-        } else if (currentSeleteYearIndex > timeLineSize - 2){
-            currentSeleteYearIndex = timeLineSize - 2;
+            rulerTouchEndSpeed = 0;
+        } else if (currentSelectedYearIndex > timeLineSize - 4){
+            currentSelectedYearIndex = timeLineSize - 4;
             offset = 0;
+            rulerTouchEndSpeed = 0;
         }
 
         //如果offset小于0，说明年份在增大，如果偏移量大于年份之间的间距，则重置offset，然后增加一年
         if(offset < 0){
             if (Math.abs(offset) >= interval){
                 offset += interval;
-                currentSeleteYearIndex++;
+                currentSelectedYearIndex++;
                 for (int i = 0; i < yearsInRegulator.length; i++){
-                    yearsInRegulator[i] = rawData.timeLine.get(i + currentSeleteYearIndex - 2);
+                    yearsInRegulator[i] = rawData.timeLine.get(i + currentSelectedYearIndex - 2);
                 }
             }
         }else{
             if (offset >= interval){
                 offset -= interval;
-                currentSeleteYearIndex--;
+                currentSelectedYearIndex--;
                 for (int i = 0; i < yearsInRegulator.length; i++){
-                    yearsInRegulator[i] = rawData.timeLine.get(i + currentSeleteYearIndex - 2);
+                    yearsInRegulator[i] = rawData.timeLine.get(i + currentSelectedYearIndex - 2);
+                }
+            }
+        }
+
+        if (!rulerTouched && rulerTouchEndSpeed != 0){
+            //如果速度大于0，说明年份在向前移动，则年份在减小
+            if (rulerTouchEndSpeed >= 0){
+                //为标尺添加阻力
+                rulerTouchEndSpeed -= resistance;
+                //如果标尺的速度足够小了，就停止移动
+                if (rulerTouchEndSpeed < 0){
+                    rulerTouchEndSpeed = 0;
+                    offset = 0;
+                }
+            }else{   //如果速度小于0，说明年份在向后移动，则年份在增加
+                rulerTouchEndSpeed += resistance;
+                if (rulerTouchEndSpeed > 0){
+                    rulerTouchEndSpeed = 0;
+                    offset = 0;
                 }
             }
         }
 
         //画出年份标尺中的上下两条线
-        canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, defaultPaint);
+        canvas.drawLine(margin + horizontalOffset, bgHeight,
+                bgWidth - margin + horizontalOffset, bgHeight, defaultPaint);
         //每次从新画之前清空这一部分画布
         canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
 
         //把目前放在yearsInRegulator数组里的年份画出来
         for (int i = 0; i < yearsInRegulator.length; i++){
             canvas.drawText(String.valueOf(yearsInRegulator[i]),
-                    margin + interval * i - TEXT_SIZE + offset, bgHeight + TEXT_SIZE * 2, textPaint);
+                    margin + interval * i - TEXT_SIZE + offset + horizontalOffset,
+                    bgHeight + TEXT_SIZE * 2 - Math.abs(i - 2) * 1.5f,
+                    textPaint[i]);
         }
 
-        canvas.drawLine(margin, bgHeight + TEXT_SIZE * 3,
-                bgWidth - margin, bgHeight + TEXT_SIZE * 3, new Paint());
+        canvas.drawLine(margin + horizontalOffset, bgHeight + TEXT_SIZE * 3,
+                bgWidth - margin + horizontalOffset, bgHeight + TEXT_SIZE * 3, defaultPaint);
 
     }
 
