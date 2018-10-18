@@ -189,6 +189,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         for (int i = 0; i < yearsInRegulator.length; i++){
             yearsInRegulator[i] = rawData.timeLine.get(i);
         }
+        currentSeleteYearIndex = 3;
     }
 
     private JsonReader getReader(String fileName) {
@@ -276,13 +277,13 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     }
 
     int lastMoveX = 0;
-    int lastMoveY = 0;
     int lastXDis = 0;   //存放每次X方向手指移动的距离
     int offset = 0;
-    long rulerTouchBeginTime = 0;
     boolean rulerTouched = false;
     float rulerTouchEndSpeed = 0;
-    static float MAX_SPEED = 0.07f;
+    long lastMoveTime = 0;
+    int lastTimeDelay = 0;
+    boolean boundaryReached = false;
     @Override
     public boolean onTouchEvent(MotionEvent event){
         int x = (int) event.getX();
@@ -292,66 +293,66 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             case MotionEvent.ACTION_DOWN:
                 if (y > bgHeight && y < bgHeight + 3 * TEXT_SIZE){
                     rulerTouched = true;
+                    lastMoveX = x;
+                    lastMoveTime = System.currentTimeMillis();
                 }
                 Log.d(TAG, "开始响应触摸事件");
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (rulerTouched){
-                    if (lastMoveX != 0){
-                        offset += x - lastMoveX;
-                        //Log.d(TAG, "触摸offset: " + offset);
-                    }
+                    offset += x - lastMoveX;
                 }
 
                 lastXDis = x - lastMoveX;
                 lastMoveX = x;
-                lastMoveY = y;
+                lastTimeDelay = (int) (System.currentTimeMillis() - lastMoveTime);
+                lastMoveTime = System.currentTimeMillis();
                 //Log.d(TAG, "上次触摸X位置：" + lastMoveX + " 当前触摸X位置：" + x + " 当前offset：" + offset);
                 break;
             case MotionEvent.ACTION_UP:
-                if (rulerTouched){
+                if (rulerTouched) {
                     rulerTouched = false;
-                    rulerTouchEndSpeed = (float) lastXDis / 300;
-                    if (rulerTouchEndSpeed > MAX_SPEED){
-                        rulerTouchEndSpeed = MAX_SPEED;
-                    }else if (rulerTouchEndSpeed < -MAX_SPEED){
-                        rulerTouchEndSpeed = -MAX_SPEED;
-                    }
+                    rulerTouchEndSpeed = (float) lastXDis / lastTimeDelay;
 
-                    Log.d(TAG, "触摸事件结束，当前标尺年份：" + t + " 当前绘图年份：" + currentSeleteYearIndex
-                            + " 结束速度：" + rulerTouchEndSpeed);
+                    Log.d(TAG, "当前绘图年份：" + currentSeleteYearIndex
+                            + " 结束速度：" + rulerTouchEndSpeed + "， 间隔时间：" + lastTimeDelay);
                     Log.d(TAG, " 与上次X的间距：" + lastXDis);
 
                     lastMoveX = 0;
-                    lastMoveY = 0;
-
-                    t = currentSeleteYearIndex;
                 }
                 break;
         }
         return true;
     }
 
-    int t = 0;   //当前选中国家在timeline中的索引
     @Override
     public void run() {
 
         while (mIsDrawing){
             long startTime = System.currentTimeMillis();
 
-            if (rawData != null){
-
-            }
-
             //线程开启时还没有rawData数据，所以需要判断rawData是否为空
-            if (plottingData != null) {
+            if (rawData != null && plottingData != null) {
+                //只有当前选定的年份在安全区域内才作画
                 draw(rawData.timeLine.get(currentSeleteYearIndex));
-                Log.d(TAG, "t = " + t + ", SeletedYear: " + currentSeleteYearIndex + "， numOfYearToDisplay: "
-                        + numOfYearToDisplay + ", offset: " + offset + ", Speed: " + rulerTouchEndSpeed + ", beginAnimation: " + beginAnimation + ", rulerTouched: " + rulerTouched);
+                Log.d(TAG, "SeletedYear: " + currentSeleteYearIndex + ", offset: " + offset + ", Speed: " + rulerTouchEndSpeed +  ", rulerTouched: " + rulerTouched);
             }
 
             long endTime = System.currentTimeMillis();
             int diffTime = (int)(endTime - startTime);
+
+            if (!rulerTouched){
+                if (rulerTouchEndSpeed != 0) {
+                    offset += diffTime * rulerTouchEndSpeed;
+                }
+                //防止用户滑出边界
+                if (currentSeleteYearIndex <= 2 || currentSeleteYearIndex >= timeLineSize - 2) {
+                    if (offset != 0) {
+                        offset = 0;
+                        rulerTouchEndSpeed = 0;
+                    }
+                }
+            }
 
             //控制画面刷新率
             while(diffTime <= DURATION_ONE_YEAR){
@@ -361,11 +362,11 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         }
     }
 
-    private void draw(int year){
+    private void draw(int yearIndex){
         try {
             mCanvas = mHolder.lockCanvas();
             //测试先画某一年的情况
-            drawSingleFrame(mCanvas, year);
+            drawSingleFrame(mCanvas, yearIndex);
             drawYearRegulator(mCanvas);
         }catch (Exception e){
             Log.e(TAG, "绘制线程出错：", e);
@@ -395,15 +396,42 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             }
         }
     }
-
-    int numOfYearToDisplay = numOfYear;
-    boolean outOfBounds = false;
     //画出每一帧年份标尺的变化
+    //注意该函数每秒允许30次
     private void drawYearRegulator(Canvas canvas){
+        if (currentSeleteYearIndex < 2) {
+            currentSeleteYearIndex = 2;
+            offset = 0;
+        } else if (currentSeleteYearIndex > timeLineSize - 2){
+            currentSeleteYearIndex = timeLineSize - 2;
+            offset = 0;
+        }
 
+        //如果offset小于0，说明年份在增大，如果偏移量大于年份之间的间距，则重置offset，然后增加一年
+        if(offset < 0){
+            if (Math.abs(offset) >= interval){
+                offset += interval;
+                currentSeleteYearIndex++;
+                for (int i = 0; i < yearsInRegulator.length; i++){
+                    yearsInRegulator[i] = rawData.timeLine.get(i + currentSeleteYearIndex - 2);
+                }
+            }
+        }else{
+            if (offset >= interval){
+                offset -= interval;
+                currentSeleteYearIndex--;
+                for (int i = 0; i < yearsInRegulator.length; i++){
+                    yearsInRegulator[i] = rawData.timeLine.get(i + currentSeleteYearIndex - 2);
+                }
+            }
+        }
+
+        //画出年份标尺中的上下两条线
         canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, defaultPaint);
+        //每次从新画之前清空这一部分画布
         canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
 
+        //把目前放在yearsInRegulator数组里的年份画出来
         for (int i = 0; i < yearsInRegulator.length; i++){
             canvas.drawText(String.valueOf(yearsInRegulator[i]),
                     margin + interval * i - TEXT_SIZE + offset, bgHeight + TEXT_SIZE * 2, textPaint);
@@ -412,83 +440,6 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         canvas.drawLine(margin, bgHeight + TEXT_SIZE * 3,
                 bgWidth - margin, bgHeight + TEXT_SIZE * 3, new Paint());
 
-
-        /*
-        if (currentSeleteYearIndex < 0){
-            beginAnimation = false;
-            currentSeleteYearIndex = 0;
-        }else if (currentSeleteYearIndex > timeLineSize - 1){
-            currentSeleteYearIndex = timeLineSize - 1;
-        }
-
-        if (numOfYearToDisplay > timeLineSize - 1){
-            numOfYearToDisplay = timeLineSize - 1;
-        }
-
-
-        //t是当前timeLine中选中过国家的索引，t-2>=0可以确保标尺在前两格没有数据时也可以显示
-        if (t - 2 >= 0) {
-            int j = t - 2;
-            //如果偏移量是负的，说明年份在往前走，则要向后添加年份
-            if (offset <= 0) {
-                for (int i = 0; i < numOfYearToDisplay; i++) {
-                    canvas.drawText(String.valueOf(rawData.timeLine.get(j)),
-                            margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
-                    j++;
-                }
-            } else {  //如果偏移量是正的，说明年份在减小，则要向前添加年份
-                //numOfYear是年份标尺能同时显示的年份数，numOfYearToDisplay是将要显示的年份数
-                for (int i = numOfYear-numOfYearToDisplay; i < numOfYear; i++) {
-                    canvas.drawText(String.valueOf(rawData.timeLine.get(j + numOfYear- numOfYearToDisplay)),
-                            margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
-                    j++;
-                }
-            }
-        }else{
-            for (int i = 0; i < numOfYearToDisplay; i++) {
-                canvas.drawText(String.valueOf(rawData.timeLine.get(i)),
-                        margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
-            }
-        }
-        */
-    }
-
-
-    boolean beginAnimation = false;
-
-
-    private int animateRulerOffset(){
-
-        /*
-        if (rulerTouched || beginAnimation){
-            if (offset > 0){
-                if (offset > interval){
-                    //实时根据offset计算需要显示年份的数量
-                    numOfYearToDisplay = numOfYear + offset / interval;
-                    currentSeleteYearIndex = t - offset / interval;
-                }
-            }else {
-                if (-offset > interval){
-                    numOfYearToDisplay = numOfYear - offset / interval;
-                    currentSeleteYearIndex = t - offset / interval;
-                }
-            }
-        }
-
-        if (!rulerTouched){
-            if (offset != 0 && !beginAnimation) {
-                beginAnimation = true;
-            }
-            if (beginAnimation){
-                //offset += rulerTouchEndSpeed * 30;
-                if (rulerTouchEndSpeed > 0){
-                    //rulerTouchEndSpeed -= friction * DURATION_ONE_YEAR;
-                }
-            }
-        }
-        */
-
-        return offset;
     }
 
     //将gdp数据分析为颜色，然后将颜色存放在一个和gdp一样大小的数组中并一一对应
