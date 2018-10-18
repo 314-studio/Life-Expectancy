@@ -181,8 +181,14 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         this.gdpInColor = constructGdpColorArray(plottingData.gdp, Color.RED, Color.GREEN);
     }
 
+    private int timeLineSize = 0;
     public void setRawData(LifeExpectancyValues rawData){
         this.rawData = rawData;
+        this.timeLineSize = rawData.timeLine.size();
+
+        for (int i = 0; i < yearsInRegulator.length; i++){
+            yearsInRegulator[i] = rawData.timeLine.get(i);
+        }
     }
 
     private JsonReader getReader(String fileName) {
@@ -233,6 +239,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     static int margin = 100;
     static int numOfYear = 5;   //同时在年份选择器上绘制的年份
     static int TEXT_SIZE = 20;
+    int[] yearsInRegulator;
     int currentSeleteYearIndex = 0;
     int interval;
     boolean isTouched = false;
@@ -243,9 +250,15 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         textPaint = new Paint();
         textPaint.setTextSize(TEXT_SIZE);
         interval = (bgWidth - margin * 2) / (numOfYear - 1);
+        yearsInRegulator = new int[numOfYear];
 
         clearPaint = new Paint();
         clearPaint.setColor(Color.WHITE);
+
+        //将画布初始化为白色
+        mCanvas = mHolder.lockCanvas();
+        mCanvas.drawColor(Color.WHITE);
+        mHolder.unlockCanvasAndPost(mCanvas);
 
         mIsDrawing = true;
         new Thread(this).start();
@@ -264,10 +277,12 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     int lastMoveX = 0;
     int lastMoveY = 0;
+    int lastXDis = 0;   //存放每次X方向手指移动的距离
     int offset = 0;
     long rulerTouchBeginTime = 0;
     boolean rulerTouched = false;
     float rulerTouchEndSpeed = 0;
+    static float MAX_SPEED = 0.07f;
     @Override
     public boolean onTouchEvent(MotionEvent event){
         int x = (int) event.getX();
@@ -288,20 +303,24 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                     }
                 }
 
+                lastXDis = x - lastMoveX;
                 lastMoveX = x;
                 lastMoveY = y;
-                rulerTouchBeginTime = System.currentTimeMillis();
                 //Log.d(TAG, "上次触摸X位置：" + lastMoveX + " 当前触摸X位置：" + x + " 当前offset：" + offset);
                 break;
             case MotionEvent.ACTION_UP:
                 if (rulerTouched){
                     rulerTouched = false;
-                    rulerTouchEndSpeed = (float) (x - lastMoveX) /
-                            (System.currentTimeMillis() - rulerTouchBeginTime);
-                    //offset = 0;
+                    rulerTouchEndSpeed = (float) lastXDis / 300;
+                    if (rulerTouchEndSpeed > MAX_SPEED){
+                        rulerTouchEndSpeed = MAX_SPEED;
+                    }else if (rulerTouchEndSpeed < -MAX_SPEED){
+                        rulerTouchEndSpeed = -MAX_SPEED;
+                    }
+
                     Log.d(TAG, "触摸事件结束，当前标尺年份：" + t + " 当前绘图年份：" + currentSeleteYearIndex
                             + " 结束速度：" + rulerTouchEndSpeed);
-                    Log.d(TAG, "当前X坐标：" + x + " 前一次的X坐标：" + lastMoveX + " 经过时间：" + (rulerTouchBeginTime - System.currentTimeMillis()));
+                    Log.d(TAG, " 与上次X的间距：" + lastXDis);
 
                     lastMoveX = 0;
                     lastMoveY = 0;
@@ -320,20 +339,15 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         while (mIsDrawing){
             long startTime = System.currentTimeMillis();
 
+            if (rawData != null){
+
+            }
+
             //线程开启时还没有rawData数据，所以需要判断rawData是否为空
-            if (rawData != null && plottingData != null) {
-                //todo：如果点击播放的话
-
-                //如果控制用户选择年份t的话
-                if (t > rawData.timeLine.size() - 1) {
-                    t = rawData.timeLine.size() - 1;
-                }
-
-                if (currentSeleteYearIndex == -1){
-                    Log.d(TAG, "array out of bounds");
-                }
+            if (plottingData != null) {
                 draw(rawData.timeLine.get(currentSeleteYearIndex));
-
+                Log.d(TAG, "t = " + t + ", SeletedYear: " + currentSeleteYearIndex + "， numOfYearToDisplay: "
+                        + numOfYearToDisplay + ", offset: " + offset + ", Speed: " + rulerTouchEndSpeed + ", beginAnimation: " + beginAnimation + ", rulerTouched: " + rulerTouched);
             }
 
             long endTime = System.currentTimeMillis();
@@ -383,10 +397,34 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     }
 
     int numOfYearToDisplay = numOfYear;
+    boolean outOfBounds = false;
     //画出每一帧年份标尺的变化
     private void drawYearRegulator(Canvas canvas){
+
         canvas.drawLine(margin, bgHeight, bgWidth - margin, bgHeight, defaultPaint);
         canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
+
+        for (int i = 0; i < yearsInRegulator.length; i++){
+            canvas.drawText(String.valueOf(yearsInRegulator[i]),
+                    margin + interval * i - TEXT_SIZE + offset, bgHeight + TEXT_SIZE * 2, textPaint);
+        }
+
+        canvas.drawLine(margin, bgHeight + TEXT_SIZE * 3,
+                bgWidth - margin, bgHeight + TEXT_SIZE * 3, new Paint());
+
+
+        /*
+        if (currentSeleteYearIndex < 0){
+            beginAnimation = false;
+            currentSeleteYearIndex = 0;
+        }else if (currentSeleteYearIndex > timeLineSize - 1){
+            currentSeleteYearIndex = timeLineSize - 1;
+        }
+
+        if (numOfYearToDisplay > timeLineSize - 1){
+            numOfYearToDisplay = timeLineSize - 1;
+        }
+
 
         //t是当前timeLine中选中过国家的索引，t-2>=0可以确保标尺在前两格没有数据时也可以显示
         if (t - 2 >= 0) {
@@ -412,18 +450,16 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                         margin + interval * i - TEXT_SIZE + animateRulerOffset(), bgHeight + TEXT_SIZE * 2, textPaint);
             }
         }
-        canvas.drawLine(margin, bgHeight + TEXT_SIZE * 3,
-                bgWidth - margin, bgHeight + TEXT_SIZE * 3, new Paint());
+        */
     }
 
-    //todo: put these values into xml
-    static float accelerationClose = 1;
-    static float friction = 1;
-    float velocity = 0;
+
     boolean beginAnimation = false;
 
 
     private int animateRulerOffset(){
+
+        /*
         if (rulerTouched || beginAnimation){
             if (offset > 0){
                 if (offset > interval){
@@ -438,17 +474,20 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                 }
             }
         }
+
         if (!rulerTouched){
             if (offset != 0 && !beginAnimation) {
                 beginAnimation = true;
             }
             if (beginAnimation){
-                offset -= rulerTouchEndSpeed * DURATION_ONE_YEAR;
+                //offset += rulerTouchEndSpeed * 30;
                 if (rulerTouchEndSpeed > 0){
                     //rulerTouchEndSpeed -= friction * DURATION_ONE_YEAR;
                 }
             }
         }
+        */
+
         return offset;
     }
 
