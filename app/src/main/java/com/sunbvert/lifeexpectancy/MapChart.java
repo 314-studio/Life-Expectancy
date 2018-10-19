@@ -1,6 +1,7 @@
 package com.sunbvert.lifeexpectancy;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -10,6 +11,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.os.Bundle;
 import android.support.annotation.ColorInt;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
@@ -28,6 +30,13 @@ import java.util.Map;
 
 public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Runnable {
 
+    public static String GDP = "gdp";
+    public static String AVERAGE_LIFE_TIME = "averageLifeTime";
+    public static String POPULATION = "population";
+    public static String COUNTRIES = "countries";
+    public static String INVESTIGATE_YEAR = "investigate_year";
+    public static String TIME_LINE = "time_line";
+
     static String TAG = "地图图表";
     static String FILE_NAME = "relative-pos.json";
     static String WORLD_MAP = "World Map";
@@ -41,6 +50,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     Map<String, Bitmap> countriesBitmap;
     Map<String, double[]> countriesPos;
     Map<String, Bitmap> scaledCountriesBitmaps;
+    Bitmap popuGraph;
 
     int[] gdpInColor;
 
@@ -52,6 +62,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     int bgHeight;
 
     int horizontalOffset = 0;
+
+    float popuGraphScale = 0;
 
     public MapChart(Context context) {
         super(context);
@@ -88,8 +100,10 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         DisplayMetrics displayMetrics = new DisplayMetrics();
          wm.getDefaultDisplay().getMetrics(displayMetrics);
 
+         //获取绘图所需的资源
         countriesBitmap = loadCountriesBitmap();
         countriesPos = loadRelativePos(getReader(FILE_NAME));
+        popuGraph = BitmapFactory.decodeResource(getResources(), R.mipmap.popu_graph);
 
         Matrix scaler = new Matrix();
         //根据屏幕宽和高决定缩放比例填充屏幕
@@ -102,11 +116,14 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             scaler.postScale(scale, scale);
         }
 
+        //依据屏幕大小缩放图片
+        //popuGraph = Bitmap.createBitmap(popuGraph, 0, 0, popuGraph.getWidth(), popuGraph.getHeight(), scaler, true);
         scaledCountriesBitmaps = scaleCountriesBitmap(countriesBitmap, scaler);
         Bitmap bg = scaledCountriesBitmaps.get(WORLD_MAP);
         this.bgWidth = bg.getWidth();
         this.bgHeight = bg.getHeight();
 
+        //如果横屏的话，计算在屏幕中央显示所需的偏差值
         if (displayMetrics.heightPixels - displayMetrics.widthPixels < 0) {
             horizontalOffset = displayMetrics.widthPixels / 2 - bgWidth / 2;
         }
@@ -174,9 +191,23 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                 bitmap.getWidth(), bitmap.getHeight(), scaler, true);
     }
 
+    static int GENERALIZATION = 100000;
     public void setData(LifeExpValuesForPlotting plottingData) {
         this.plottingData = plottingData;
         this.gdpInColor = constructGdpColorArray(plottingData.gdp, Color.RED, Color.GREEN);
+
+        long max = 0;
+        for (int i = 0; i < plottingData.population.length; i++){
+            if (plottingData.population[i] > max){
+                max = plottingData.population[i];
+            }
+        }
+        double f = (double)(max / GENERALIZATION);
+        if (f <= 1){
+            f = 2;
+        }
+        this.popuGraphScale = (float) bgHeight / (8 * (float)Math.log(f));
+        Log.d(TAG, "Population Graph scale: " + popuGraphScale);
     }
 
     private int timeLineSize = 0;
@@ -332,9 +363,52 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
                     lastMoveX = 0;
                 }
+
+                detectTouchOnCountry(x, y);
                 break;
         }
         return true;
+    }
+
+    private void detectTouchOnCountry(int x, int y){
+        for (int i = 0; i < rawData.counties.size(); i++){
+            String countryName = rawData.counties.get(i);
+            int posX = (int)(bgWidth * countriesPos.get(countryName)[0]);
+            int posY = (int)(bgHeight * countriesPos.get(countryName)[1]);
+
+            Bitmap bitmap = scaledCountriesBitmaps.get(countryName);
+            if (x > posX && x < posX + bitmap.getWidth()){
+                if (y > posY && y < posY + bitmap.getHeight()){
+                    if (bitmapHasColorAt(bitmap, x - posX, y - posY)){
+                        Log.d(TAG, "country name: " + countryName + ", x: " + x + ", y: " + y + ", x - posX = " + (x - posX) + ", y - posY = " + (y - posY));
+
+                        int[] timeLine = new int[rawData.timeLine.size()];
+                        for (int j = 0; j < rawData.timeLine.size(); j++){
+                            timeLine[i] = rawData.timeLine.get(i);
+                        }
+
+                        Intent intent = new Intent(getContext(), DisplayData.class);
+                        intent.putExtra(MapActivity.COUNTRY_NAME, countryName);
+                        intent.putExtra(GDP, this.plottingData.gdp);
+                        intent.putExtra(TIME_LINE, timeLine);
+                        intent.putExtra(INVESTIGATE_YEAR, plottingData.investigateYear);
+                        intent.putExtra(AVERAGE_LIFE_TIME, plottingData.averageLifeTime);
+                        intent.putExtra(POPULATION, plottingData.population);
+                        intent.putExtra(COUNTRIES, plottingData.counties);
+
+                        getContext().startActivity(intent);
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean bitmapHasColorAt(Bitmap bitmap, int x, int y){
+        int clr = bitmap.getPixel(x, y);
+        if (clr != 0){
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -369,12 +443,13 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         }
     }
 
-    private void draw(int yearIndex){
+    private void draw(int year){
         try {
             mCanvas = mHolder.lockCanvas();
             mCanvas.drawColor(Color.WHITE);
-            drawSingleFrame(mCanvas, yearIndex);
+            drawSingleFrame(mCanvas, year);
             drawYearRegulator(mCanvas);
+            drawPopulationGraph(mCanvas, year);
         }catch (Exception e){
             Log.e(TAG, "绘制线程出错：", e);
         }finally {
@@ -383,6 +458,45 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             }
         }
 
+    }
+
+    private void drawPopulationGraph(Canvas canvas, int year){
+        for(int i = 0; i < plottingData.population.length; i++){
+            if (plottingData.investigateYear[i] == year){
+                String countryName = plottingData.counties[i];
+                long countryPopu = plottingData.population[i];
+                Bitmap countryBitmap = scaledCountriesBitmaps.get(countryName);
+                double f = countryPopu / GENERALIZATION;
+                if (f <= 1){
+                    f = 2;
+                }
+                float scale = (popuGraphScale *  (float) Math.log(f)) / popuGraph.getHeight();
+                //Log.d(TAG, countryName + ", popuGraphScale: " + popuGraphScale + ", f: " + f);
+                //Log.d(TAG, "scale: " + scale);
+                Matrix matrix = new Matrix();
+                matrix.postScale(scale, scale);
+                Bitmap scaledBitmap = Bitmap.createBitmap(popuGraph, 0, 0,
+                        popuGraph.getWidth(),
+                        popuGraph.getHeight(),
+                        matrix, true);
+
+                if (countryName.equals("United States")){
+                    canvas.drawBitmap(scaledBitmap,
+                            (float) countriesPos.get(countryName)[0] * bgWidth + horizontalOffset - bgWidth / 4
+                                    + countryBitmap.getWidth() / 2  - scaledBitmap.getWidth() / 2,
+                            (float) countriesPos.get(countryName)[1] * bgHeight + 50
+                                    + countryBitmap.getHeight() / 2 - scaledBitmap.getHeight() / 2,
+                            new Paint());
+                }else {
+                    canvas.drawBitmap(scaledBitmap,
+                            (float) countriesPos.get(countryName)[0] * bgWidth + horizontalOffset
+                                    + countryBitmap.getWidth() / 2 - scaledBitmap.getWidth() / 2,
+                            (float) countriesPos.get(countryName)[1] * bgHeight
+                                    + countryBitmap.getHeight() / 2 - scaledBitmap.getHeight() / 2,
+                            new Paint());
+                }
+            }
+        }
     }
 
      //画出每一帧的国家颜色变化

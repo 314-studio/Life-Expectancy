@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LifeExpectancyValues {
-    static String valueFormat = "[815,34.05,351014,\"Australia\",1800]";
 
     public List<String> counties;
     public List<Integer> timeLine;

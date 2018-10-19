@@ -14,8 +14,11 @@ import java.util.List;
 
 public class MapActivity extends AppCompatActivity {
 
+    public static String COUNTRY_NAME = "country_name";
+
     static String TAG = "地图图表界面";
     static String FILE_NAME = "life-expectancy.json";
+
 
     MapChart mapChart;
 
