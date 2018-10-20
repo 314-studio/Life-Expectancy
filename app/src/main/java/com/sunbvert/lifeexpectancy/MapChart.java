@@ -36,6 +36,10 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     public static String COUNTRIES = "countries";
     public static String INVESTIGATE_YEAR = "investigate_year";
     public static String TIME_LINE = "time_line";
+    public static String SELECTED_YEAR = "selected_year";
+    public static String COUNTRY_NAME = "country_name";
+    public static String GDP_IN_COLOR = "gdp_in_color";
+    public static String COUNTRY_BITMAP = "country_bitmap";
 
     static String TAG = "地图图表";
     static String FILE_NAME = "relative-pos.json";
@@ -186,7 +190,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         return scaledBitmaps;
     }
 
-    private Bitmap scaleBitmap(Bitmap bitmap, Matrix scaler){
+    public static Bitmap scaleBitmap(Bitmap bitmap, Matrix scaler){
         return Bitmap.createBitmap(bitmap, 0, 0,
                 bitmap.getWidth(), bitmap.getHeight(), scaler, true);
     }
@@ -194,7 +198,10 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     static int GENERALIZATION = 100000;
     public void setData(LifeExpValuesForPlotting plottingData) {
         this.plottingData = plottingData;
-        this.gdpInColor = constructGdpColorArray(plottingData.gdp, Color.RED, Color.GREEN);
+
+        int startColor = getResources().getColor(R.color.gdp_low);
+        int endColor = getResources().getColor(R.color.gdp_high);
+        this.gdpInColor = constructGdpColorArray(plottingData.gdp, startColor, endColor);
 
         long max = 0;
         for (int i = 0; i < plottingData.population.length; i++){
@@ -207,7 +214,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             f = 2;
         }
         this.popuGraphScale = (float) bgHeight / (8 * (float)Math.log(f));
-        Log.d(TAG, "Population Graph scale: " + popuGraphScale);
+        //Log.d(TAG, "Population Graph scale: " + popuGraphScale);
     }
 
     private int timeLineSize = 0;
@@ -357,9 +364,9 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                         rulerTouchEndSpeed = -10;
                     }
 
-                    Log.d(TAG, "当前绘图年份：" + currentSelectedYearIndex
-                            + " 结束速度：" + rulerTouchEndSpeed + "， 间隔时间：" + lastTimeDelay);
-                    Log.d(TAG, " 与上次X的间距：" + lastXDis);
+                    //Log.d(TAG, "当前绘图年份：" + currentSelectedYearIndex
+                    //        + " 结束速度：" + rulerTouchEndSpeed + "， 间隔时间：" + lastTimeDelay);
+                    //Log.d(TAG, " 与上次X的间距：" + lastXDis);
 
                     lastMoveX = 0;
                 }
@@ -373,7 +380,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     private void detectTouchOnCountry(int x, int y){
         for (int i = 0; i < rawData.counties.size(); i++){
             String countryName = rawData.counties.get(i);
-            int posX = (int)(bgWidth * countriesPos.get(countryName)[0]);
+            int posX = (int)(bgWidth * countriesPos.get(countryName)[0]) + horizontalOffset;
             int posY = (int)(bgHeight * countriesPos.get(countryName)[1]);
 
             Bitmap bitmap = scaledCountriesBitmaps.get(countryName);
@@ -388,14 +395,17 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                         }
 
                         Intent intent = new Intent(getContext(), DisplayData.class);
-                        intent.putExtra(MapActivity.COUNTRY_NAME, countryName);
+                        intent.putExtra(SELECTED_YEAR, rawData.timeLine.get(currentSelectedYearIndex));
+                        intent.putExtra(COUNTRY_NAME, countryName);
                         intent.putExtra(GDP, this.plottingData.gdp);
                         intent.putExtra(TIME_LINE, timeLine);
                         intent.putExtra(INVESTIGATE_YEAR, plottingData.investigateYear);
                         intent.putExtra(AVERAGE_LIFE_TIME, plottingData.averageLifeTime);
                         intent.putExtra(POPULATION, plottingData.population);
                         intent.putExtra(COUNTRIES, plottingData.counties);
+                        intent.putExtra(GDP_IN_COLOR, gdpInColor);
 
+                        DisplayData.COUNTRY_BITMAP = countriesBitmap.get(countryName);
                         getContext().startActivity(intent);
                     }
                 }
@@ -421,8 +431,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             if (rawData != null && plottingData != null) {
                 //只有当前选定的年份在安全区域内才作画
                 draw(rawData.timeLine.get(currentSelectedYearIndex));
-                Log.d(TAG, "SelectedYear: " + currentSelectedYearIndex + ", offset: " +
-                        offset + ", Speed: " + rulerTouchEndSpeed +  ", rulerTouched: " + rulerTouched);
+                //Log.d(TAG, "SelectedYear: " + currentSelectedYearIndex + ", offset: " +
+                //        offset + ", Speed: " + rulerTouchEndSpeed +  ", rulerTouched: " + rulerTouched);
             }
 
             long endTime = System.currentTimeMillis();
@@ -446,10 +456,12 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     private void draw(int year){
         try {
             mCanvas = mHolder.lockCanvas();
-            mCanvas.drawColor(Color.WHITE);
+            if (mCanvas != null) {
+                mCanvas.drawColor(Color.WHITE);
+            }
             drawSingleFrame(mCanvas, year);
             drawYearRegulator(mCanvas);
-            drawPopulationGraph(mCanvas, year);
+            //drawPopulationGraph(mCanvas, year);
         }catch (Exception e){
             Log.e(TAG, "绘制线程出错：", e);
         }finally {
@@ -502,8 +514,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
      //画出每一帧的国家颜色变化
     private void drawSingleFrame(Canvas canvas, int year){
         canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), horizontalOffset, 0, defaultPaint);
-        for(int i = 0; i < plottingData.gdp.length; i++){
-            if (plottingData.investigateYear[i] == year){
+        for (int i = 0; i < plottingData.gdp.length; i++) {
+            if (plottingData.investigateYear[i] == year) {
                 String countryName = plottingData.counties[i];
                 Bitmap countryBitmap = scaledCountriesBitmaps.get(countryName);
                 Bitmap coloredBitmap = changeBitmapColor(countryBitmap, gdpInColor[i]);
@@ -616,7 +628,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     }
 
     //将给定的Bitmap的不透明区域填充为给定的颜色
-    private Bitmap changeBitmapColor(Bitmap inBitmap, Integer dstColor){
+    public static Bitmap changeBitmapColor(Bitmap inBitmap, Integer dstColor){
         if (inBitmap == null) {
             return null;
         }
