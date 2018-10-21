@@ -7,10 +7,12 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.Shader;
 import android.os.Bundle;
 import android.support.annotation.ColorInt;
 import android.util.AttributeSet;
@@ -68,6 +70,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     int horizontalOffset = 0;
 
     float popuGraphScale = 0;
+
+    Paint colorRulerPaint;
 
     public MapChart(Context context) {
         super(context);
@@ -202,6 +206,12 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         int startColor = getResources().getColor(R.color.gdp_low);
         int endColor = getResources().getColor(R.color.gdp_high);
         this.gdpInColor = constructGdpColorArray(plottingData.gdp, startColor, endColor);
+
+        //颜色标尺
+        colorRulerPaint = new Paint();
+        LinearGradient linearGradient = new LinearGradient(0, 0, 0, bgHeight / 2, new int[]{startColor, endColor},
+                null, Shader.TileMode.CLAMP);
+        colorRulerPaint.setShader(linearGradient);
 
         long max = 0;
         for (int i = 0; i < plottingData.population.length; i++){
@@ -528,6 +538,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                 }
             }
         }
+        //canvas.drawRect(bgWidth - 200, 25, bgWidth - 100, bgHeight - 25, colorRulerPaint);
     }
 
     static float resistance = 0.2f;
