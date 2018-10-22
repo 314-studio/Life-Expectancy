@@ -15,16 +15,20 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class CountryInfoView extends View {
     static String TAG = "Country info: ";
 
-    static int paddingTop = 50;
-    static int ONE_HUNDRED_MILLION = 100000000;
-    static int POPU_SCALE = 20;
+    private static final int paddingTop = 50;
+    private static final int ONE_HUNDRED_MILLION = 100000000;
+    private static final int POPU_SCALE = 20;
+    private static final int GLOBAL_ANIMATION_CTRL = 1000;
+    private static final int GLOBAL_ANIMATION_DURE = 100000;
 
     Bitmap countryBitmap;
     Bitmap popuGraph;
-    Bitmap scaledPopuGraph;
     LifeExpValuesForPlotting plottingData;
     int[] gdpInColor;
     String countryName;
@@ -34,9 +38,11 @@ public class CountryInfoView extends View {
 
     DisplayMetrics displayMetrics;
     int animatedNumOfGraph = 1;
-    Bitmap animatedPopuGraphOne;
+    float colorScale = 1;
 
-    ValueAnimator popuGraphScaleAnimOne;
+    List<PopuAnimationUnit> popuAnimUnits;
+
+    ValueAnimator globalAnimator;
     ValueAnimator popuGraphNumAnim;
 
     public CountryInfoView(Context context) {
@@ -62,6 +68,8 @@ public class CountryInfoView extends View {
         ViewGroup.LayoutParams lp = this.getLayoutParams();
         lp.height = countryBitmap.getHeight() + paddingTop * 2;
         this.setLayoutParams(lp);
+
+        popuAnimUnits = new ArrayList<PopuAnimationUnit>();
     }
 
     public void setPlottingData(LifeExpValuesForPlotting plottingData, int[] gdpInColor) {
@@ -79,7 +87,7 @@ public class CountryInfoView extends View {
         Matrix matrix = new Matrix();
         float scale = (float) displayMetrics.widthPixels / (POPU_SCALE * popuGraph.getHeight());
         matrix.postScale(scale, scale);
-        scaledPopuGraph = Bitmap.createBitmap(popuGraph, 0, 0,
+        popuGraph = Bitmap.createBitmap(popuGraph, 0, 0,
                 popuGraph.getWidth(), popuGraph.getHeight(), matrix, true);
 
         if (countryName != null){
@@ -96,82 +104,75 @@ public class CountryInfoView extends View {
             }
         }
 
-        //创建补间动画
-        popuGraphScaleAnimOne = ValueAnimator.ofFloat(scale * 0.5f, scale);
-        popuGraphNumAnim = ValueAnimator.ofInt(1, numOfPopuGraph);
-        Log.d(TAG, "initial scale = " + scale);
+        colorScale = 1 / (float) numOfPopuGraph;
 
+        //创建补间动画
+        globalAnimator = ValueAnimator.ofInt(0, GLOBAL_ANIMATION_CTRL);
+        popuGraphNumAnim = ValueAnimator.ofInt(1, numOfPopuGraph);
         setAnimation();
     }
 
     boolean animationBegin = false;
     //设置动画动作
     private void setAnimation(){
+        globalAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                if (popuAnimUnits.size() < animatedNumOfGraph) {
+                    PopuAnimationUnit unit = new PopuAnimationUnit(popuGraph, animatedNumOfGraph * colorScale);
+                    unit.setAnimationStart();
+                    popuAnimUnits.add(unit);
+                }
+                Log.d(TAG, "全局动画运行返回值：" + animation.getAnimatedValue());
+                invalidate();
+            }
+        });
+        globalAnimator.setDuration(GLOBAL_ANIMATION_DURE);
+
         popuGraphNumAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 animatedNumOfGraph = (int) animation.getAnimatedValue();
-                invalidate();
+                Log.d(TAG, "小人数量动画返回值：" + animatedNumOfGraph);
             }
         });
-        popuGraphNumAnim.setDuration(numOfPopuGraph * 300);
-
-        popuGraphScaleAnimOne.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                float animatedScale = (float) animation.getAnimatedValue();
-                Log.d(TAG, "animated scale = " + animatedScale);
-
-                animatedNumOfGraph = numOfPopuGraph;
-
-                Matrix matrix = new Matrix();
-                matrix.postScale(animatedScale, animatedScale);
-                animatedPopuGraphOne = Bitmap.createBitmap(popuGraph, 0, 0, popuGraph.getWidth(),
-                        popuGraph.getHeight(), matrix, true);
-                invalidate();
-            }
-        });
-        popuGraphScaleAnimOne.setDuration(300);
+        popuGraphNumAnim.setDuration(numOfPopuGraph * 10000);
     }
 
     @Override
     protected void onDraw(Canvas canvas){
+        //第一次运行时设置动画开始
         if (!animationBegin){
-            animationBegin = true;
-            popuGraphScaleAnimOne.start();
+            globalAnimator.start();
+            popuGraphNumAnim.start();
         }
 
-        if (!popuGraphScaleAnimOne.isRunning()){
-            animationBegin = false;
-        }
-
-        if (countryBitmap != null){
+        if (countryBitmap != null) {
             canvas.drawBitmap(countryBitmap, displayMetrics.widthPixels / 2 - countryBitmap.getWidth() / 2,
                     paddingTop, defaultPaint);
-            if (animatedPopuGraphOne != null) {
-                int firstLineGraphNum = (int) Math.sqrt(animatedNumOfGraph * 2);
-                int count = 0;
-                int lineNum = firstLineGraphNum;
-                for (int i = 0; i < firstLineGraphNum; i++) {
-                    for (int j = 0; j < lineNum; j++) {
-                        canvas.drawBitmap(animatedPopuGraphOne, j * (animatedPopuGraphOne.getWidth() - 25),
-                                i * animatedPopuGraphOne.getHeight(), defaultPaint);
-                        count++;
+            int firstLineGraphNum = (int) Math.sqrt(animatedNumOfGraph * 2);
+            int count = 0;
+            int lineNum = firstLineGraphNum;
+            for (int i = 0; i < firstLineGraphNum; i++) {
+                for (int j = 0; j < lineNum; j++) {
+                    PopuAnimationUnit unit = popuAnimUnits.get(count);
+                    canvas.drawBitmap(unit.getAnimatedPopuGraph(), j * (unit.getAnimatedPopuGraph().getWidth() - 25),
+                            i * unit.getAnimatedPopuGraph().getHeight(), defaultPaint);
+                    count++;
 
-                        if (count >= animatedNumOfGraph) {
-                            count = 0;
-                            break;
-                        }
-                    }
-                    if (count == 0) {
+                    if (count >= animatedNumOfGraph) {
+                        count = 0;
                         break;
                     }
-                    lineNum--;
                 }
+                if (count == 0) {
+                    break;
+                }
+                lineNum--;
             }
-            int bottom = countryBitmap.getHeight() + paddingTop * 2 - 25;
-            canvas.drawLine(0, bottom, displayMetrics.widthPixels, bottom, defaultPaint);
         }
+        int bottom = countryBitmap.getHeight() + paddingTop * 2 - 25;
+        canvas.drawLine(0, bottom, displayMetrics.widthPixels, bottom, defaultPaint);
     }
 
     private @ColorInt int getColor(String countryName, int year){
