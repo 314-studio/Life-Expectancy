@@ -24,8 +24,8 @@ public class CountryInfoView extends View {
     private static final int paddingTop = 50;
     private static final int ONE_HUNDRED_MILLION = 100000000;
     private static final int POPU_SCALE = 20;
-    private static final int GLOBAL_ANIMATION_CTRL = 1000;
-    private static final int GLOBAL_ANIMATION_DURE = 100000;
+    private static final int GLOBAL_ANIMATION_CTRL = 100;
+    private static final int GLOBAL_ANIMATION_DURE = 10000;
 
     Bitmap countryBitmap;
     Bitmap popuGraph;
@@ -83,7 +83,7 @@ public class CountryInfoView extends View {
         this.defaultPaint = new Paint();
 
         //获取小人图片并缩放到合适的大小
-        this.popuGraph = BitmapFactory.decodeResource(getResources(), R.mipmap.popu_graph);
+        this.popuGraph = BitmapFactory.decodeResource(getResources(), R.mipmap.popu_graph_white);
         Matrix matrix = new Matrix();
         float scale = (float) displayMetrics.widthPixels / (POPU_SCALE * popuGraph.getHeight());
         matrix.postScale(scale, scale);
@@ -118,11 +118,6 @@ public class CountryInfoView extends View {
         globalAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
-                if (popuAnimUnits.size() < animatedNumOfGraph) {
-                    PopuAnimationUnit unit = new PopuAnimationUnit(popuGraph, animatedNumOfGraph * colorScale);
-                    unit.setAnimationStart();
-                    popuAnimUnits.add(unit);
-                }
                 Log.d(TAG, "全局动画运行返回值：" + animation.getAnimatedValue());
                 invalidate();
             }
@@ -133,10 +128,17 @@ public class CountryInfoView extends View {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 animatedNumOfGraph = (int) animation.getAnimatedValue();
+                if (popuAnimUnits.size() < animatedNumOfGraph) {
+                    PopuAnimationUnit unit = new PopuAnimationUnit(CountryInfoView.this,
+                            popuGraph, animatedNumOfGraph * colorScale);
+                    unit.setAnimationStart();
+                    popuAnimUnits.add(unit);
+                }
                 Log.d(TAG, "小人数量动画返回值：" + animatedNumOfGraph);
+
             }
         });
-        popuGraphNumAnim.setDuration(numOfPopuGraph * 10000);
+        popuGraphNumAnim.setDuration(numOfPopuGraph * 250);
     }
 
     @Override
@@ -145,24 +147,27 @@ public class CountryInfoView extends View {
         if (!animationBegin){
             globalAnimator.start();
             popuGraphNumAnim.start();
+            animationBegin = true;
         }
 
         if (countryBitmap != null) {
             canvas.drawBitmap(countryBitmap, displayMetrics.widthPixels / 2 - countryBitmap.getWidth() / 2,
                     paddingTop, defaultPaint);
-            int firstLineGraphNum = (int) Math.sqrt(animatedNumOfGraph * 2);
+            int firstLineGraphNum = (int) Math.sqrt(numOfPopuGraph * 2);
             int count = 0;
             int lineNum = firstLineGraphNum;
             for (int i = 0; i < firstLineGraphNum; i++) {
                 for (int j = 0; j < lineNum; j++) {
-                    PopuAnimationUnit unit = popuAnimUnits.get(count);
-                    canvas.drawBitmap(unit.getAnimatedPopuGraph(), j * (unit.getAnimatedPopuGraph().getWidth() - 25),
-                            i * unit.getAnimatedPopuGraph().getHeight(), defaultPaint);
-                    count++;
+                    if (popuAnimUnits.size() <= animatedNumOfGraph) {
+                        PopuAnimationUnit unit = popuAnimUnits.get(count);
+                        canvas.drawBitmap(unit.getAnimatedPopuGraph(), j * (unit.getAnimatedPopuGraph().getWidth() - 25),
+                                i * unit.getAnimatedPopuGraph().getHeight(), defaultPaint);
+                        count++;
 
-                    if (count >= animatedNumOfGraph) {
-                        count = 0;
-                        break;
+                        if (count >= animatedNumOfGraph) {
+                            count = 0;
+                            break;
+                        }
                     }
                 }
                 if (count == 0) {

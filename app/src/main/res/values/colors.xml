@@ -5,4 +5,7 @@
     <color name="colorAccent">#D81B60</color>
     <color name="gdp_low">#2A00FF</color>
     <color name="gdp_high">#FFCA00</color>
+    <color name="popu_red">#FF0000</color>
+    <color name="popu_green">#0CFF00</color>
+    <color name="popu_white">#FFFFFF</color>
 </resources>
