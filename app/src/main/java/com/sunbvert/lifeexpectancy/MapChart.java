@@ -13,7 +13,6 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Shader;
-import android.os.Bundle;
 import android.support.annotation.ColorInt;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
@@ -43,6 +42,9 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     public static final String GDP_IN_COLOR = "gdp_in_color";
     public static final String COUNTRY_BITMAP = "country_bitmap";
 
+    private static final int maxGdp = 40000;
+    private static final int minGdp = 500;
+
     static final String TAG = "地图图表";
     static final String FILE_NAME = "relative-pos.json";
     static final String WORLD_MAP = "World Map";
@@ -69,9 +71,13 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     private int horizontalOffset = 0;
 
-    private float popuGraphScale = 0;
+    //private float popuGraphScale = 0;
 
     private Paint colorRulerPaint;
+    private Paint rulerLinePaint;
+    private Paint rulerTextPaint;
+    private Paint rulerTipPaint;
+    private Paint titlePaint;
 
     public MapChart(Context context) {
         super(context);
@@ -135,6 +141,16 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         if (displayMetrics.heightPixels - displayMetrics.widthPixels < 0) {
             horizontalOffset = displayMetrics.widthPixels / 2 - bgWidth / 2;
         }
+
+        rulerLinePaint = new Paint();
+        rulerLinePaint.setStrokeWidth(3);
+        rulerTextPaint = new Paint();
+        rulerTextPaint.setTextSize(20);
+        rulerTipPaint = new Paint();
+        rulerTipPaint.setTextSize(30);
+        titlePaint = new Paint();
+        titlePaint.setTextSize(50);
+        titlePaint.setStrokeWidth(3);
     }
 
     private Map<String, Bitmap> loadCountriesBitmap(){
@@ -199,7 +215,9 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                 bitmap.getWidth(), bitmap.getHeight(), scaler, true);
     }
 
-    static int GENERALIZATION = 100000;
+    private static int colorRulerHorMargin;
+    private static int colorRulerMargin;
+    private static final int GENERALIZATION = 100000;
     public void setData(LifeExpValuesForPlotting plottingData) {
         this.plottingData = plottingData;
 
@@ -208,11 +226,15 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         this.gdpInColor = constructGdpColorArray(plottingData.gdp, startColor, endColor);
 
         //颜色标尺
+        colorRulerMargin = bgHeight / 6;
+        colorRulerHorMargin = 50;
         colorRulerPaint = new Paint();
-        LinearGradient linearGradient = new LinearGradient(0, 0, 0, bgHeight / 2, new int[]{startColor, endColor},
+        LinearGradient linearGradient = new LinearGradient(0, colorRulerMargin,
+                0, bgHeight - colorRulerMargin, new int[]{startColor, endColor},
                 null, Shader.TileMode.CLAMP);
         colorRulerPaint.setShader(linearGradient);
 
+        /*
         long max = 0;
         for (int i = 0; i < plottingData.population.length; i++){
             if (plottingData.population[i] > max){
@@ -225,6 +247,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         }
         this.popuGraphScale = (float) bgHeight / (8 * (float)Math.log(f));
         //Log.d(TAG, "Population Graph scale: " + popuGraphScale);
+        */
     }
 
     private int timeLineSize = 0;
@@ -282,6 +305,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
     Paint defaultPaint;
     Paint[] textPaint;
     Paint clearPaint;
+    Paint linePaint;
 
     static int margin = 100;
     static int numOfYear = 5;   //同时在年份选择器上绘制的年份
@@ -311,6 +335,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
         clearPaint = new Paint();
         clearPaint.setColor(Color.WHITE);
+        linePaint = new Paint();
+        linePaint.setStrokeWidth(2);
 
         //将画布初始化为白色
         mCanvas = mHolder.lockCanvas();
@@ -401,7 +427,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
                         int[] timeLine = new int[rawData.timeLine.size()];
                         for (int j = 0; j < rawData.timeLine.size(); j++){
-                            timeLine[i] = rawData.timeLine.get(i);
+                            timeLine[j] = rawData.timeLine.get(j);
                         }
 
                         Intent intent = new Intent(getContext(), DisplayData.class);
@@ -482,6 +508,8 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
     }
 
+    //弃用的方法
+    /*
     private void drawPopulationGraph(Canvas canvas, int year){
         for(int i = 0; i < plottingData.population.length; i++){
             if (plottingData.investigateYear[i] == year){
@@ -520,10 +548,13 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
             }
         }
     }
+    */
 
+    private static final String title = "全球部分国家人均GDP数据地图";
      //画出每一帧的国家颜色变化
     private void drawSingleFrame(Canvas canvas, int year){
         canvas.drawBitmap(scaledCountriesBitmaps.get(WORLD_MAP), horizontalOffset, 0, defaultPaint);
+        //canvas.drawText(title, 0, 50, titlePaint);
         for (int i = 0; i < plottingData.gdp.length; i++) {
             if (plottingData.investigateYear[i] == year) {
                 String countryName = plottingData.counties[i];
@@ -538,7 +569,22 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
                 }
             }
         }
-        //canvas.drawRect(bgWidth - 200, 25, bgWidth - 100, bgHeight - 25, colorRulerPaint);
+        //画出颜色标尺
+        int margin = 10;
+        int rulerLeft = bgWidth - colorRulerHorMargin + horizontalOffset;
+        int rulerRight = bgWidth - colorRulerHorMargin / 2 + horizontalOffset;
+        int rulerTop = colorRulerMargin;
+        int rulerBottom = bgHeight - colorRulerMargin;
+        int rulerMiddleY = (rulerTop + rulerBottom) / 2;
+        canvas.drawRect(rulerLeft, rulerTop, rulerRight, rulerBottom, colorRulerPaint);
+        canvas.drawLine(rulerLeft - margin, rulerTop + margin, rulerRight + margin, rulerTop + margin, rulerLinePaint);
+        canvas.drawLine(rulerLeft - margin, rulerMiddleY, rulerRight + margin, rulerMiddleY, rulerLinePaint);
+        canvas.drawLine(rulerLeft - margin, rulerBottom - margin, rulerRight + margin, rulerBottom - margin, rulerLinePaint);
+
+        canvas.drawText("GDP(美元)", rulerLeft - 3 * margin, rulerTop - 2 * margin, rulerTipPaint);
+        canvas.drawText(String.valueOf(maxGdp), rulerRight + margin, rulerTop + margin, rulerTextPaint);
+        canvas.drawText(String.valueOf((maxGdp + minGdp) / 2), rulerRight + margin, rulerMiddleY + margin, rulerTextPaint);
+        canvas.drawText(String.valueOf(minGdp), rulerRight + margin, rulerBottom, rulerTextPaint);
     }
 
     static final float resistance = 0.2f;
@@ -596,7 +642,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
 
         //画出年份标尺中的上下两条线
         canvas.drawLine(margin + horizontalOffset, bgHeight,
-                bgWidth - margin + horizontalOffset, bgHeight, defaultPaint);
+                bgWidth - margin + horizontalOffset, bgHeight, linePaint);
         //每次从新画之前清空这一部分画布
         canvas.drawRect(0, bgHeight + TEXT_SIZE, bgWidth, bgHeight + TEXT_SIZE * 2, clearPaint);
 
@@ -609,7 +655,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         }
 
         canvas.drawLine(margin + horizontalOffset, bgHeight + TEXT_SIZE * 3,
-                bgWidth - margin + horizontalOffset, bgHeight + TEXT_SIZE * 3, defaultPaint);
+                bgWidth - margin + horizontalOffset, bgHeight + TEXT_SIZE * 3, linePaint);
 
     }
 

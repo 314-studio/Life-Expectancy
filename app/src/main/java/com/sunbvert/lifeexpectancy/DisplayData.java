@@ -11,6 +11,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.DisplayMetrics;
 import android.util.JsonReader;
 import android.util.Log;
+import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.Animation;
 import android.widget.ImageView;
@@ -126,8 +127,11 @@ public class DisplayData extends AppCompatActivity {
 
         bitmap = MapChart.scaleBitmap(bitmap, scaler);
 
+        View view = getLayoutInflater().inflate(R.layout.year_list_dialog, null);
         mapView.setCountryBitmap(bitmap, countryName, year);
         mapView.setPlottingData(plottingData, gdpInColor);
+        mapView.setTimeLine(data.getIntArrayExtra(MapChart.TIME_LINE), view);
+
         //mapView.invalidate();
     }
 
@@ -157,12 +161,15 @@ public class DisplayData extends AppCompatActivity {
         LineDataSet setPopu = new LineDataSet(popuEntries, "人口数(千万)");
         setPopu.setAxisDependency(YAxis.AxisDependency.LEFT);
         setPopu.setColor(Color.BLUE);
+        setPopu.setDrawCircles(false);
         LineDataSet setAge = new LineDataSet(ageEntries, "平均年龄(岁)");
         setAge.setAxisDependency(YAxis.AxisDependency.LEFT);
         setAge.setColor(Color.GREEN);
+        setAge.setDrawCircles(false);
         LineDataSet setGdp = new LineDataSet(gdpEntries, "人均GDP(百美元)");
         setGdp.setAxisDependency(YAxis.AxisDependency.LEFT);
         setGdp.setColor(Color.RED);
+        setGdp.setDrawCircles(false);
 
         List<ILineDataSet> dataSets = new ArrayList<ILineDataSet>();
         dataSets.add(setPopu);
@@ -177,6 +184,9 @@ public class DisplayData extends AppCompatActivity {
         chart.setData(data);
         chart.setDescription(description);
         chart.animateXY(3000, 3000);
+        chart.getXAxis().setDrawGridLines(false);
+        chart.getAxisRight().setDrawAxisLine(false);
+        chart.setDrawBorders(false);
         chart.invalidate();
     }
 
