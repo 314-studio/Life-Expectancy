@@ -14,8 +14,8 @@ import java.util.List;
 
 public class MapActivity extends AppCompatActivity {
 
-    static String TAG = "地图图表界面";
-    static String FILE_NAME = "life-expectancy.json";
+    static final String TAG = "地图图表界面";
+    static final String FILE_NAME = "life-expectancy.json";
 
 
     MapChart mapChart;
@@ -39,10 +39,10 @@ public class MapActivity extends AppCompatActivity {
             asyncLoad.execute(reader);
         } catch (IOException e){
             Log.e(TAG, "无法读取到文件" + FILE_NAME);
-            //todo: 添加警示框
         }
     }
 
+    //读取JSON的线程类
     private class LoadJsonData extends AsyncTask<JsonReader, Integer, LifeExpectancyValues> {
 
         @Override
@@ -135,6 +135,7 @@ public class MapActivity extends AppCompatActivity {
     }
 
 
+    //分割并二次处理数据的线程类
     private class SplitJsonData extends AsyncTask<LifeExpectancyValues, Integer, LifeExpValuesForPlotting> {
 
         @Override

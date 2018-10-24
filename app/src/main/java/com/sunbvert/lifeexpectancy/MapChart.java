@@ -32,46 +32,46 @@ import java.util.Map;
 
 public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Runnable {
 
-    public static String GDP = "gdp";
-    public static String AVERAGE_LIFE_TIME = "averageLifeTime";
-    public static String POPULATION = "population";
-    public static String COUNTRIES = "countries";
-    public static String INVESTIGATE_YEAR = "investigate_year";
-    public static String TIME_LINE = "time_line";
-    public static String SELECTED_YEAR = "selected_year";
-    public static String COUNTRY_NAME = "country_name";
-    public static String GDP_IN_COLOR = "gdp_in_color";
-    public static String COUNTRY_BITMAP = "country_bitmap";
+    public static final String GDP = "gdp";
+    public static final String AVERAGE_LIFE_TIME = "averageLifeTime";
+    public static final String POPULATION = "population";
+    public static final String COUNTRIES = "countries";
+    public static final String INVESTIGATE_YEAR = "investigate_year";
+    public static final String TIME_LINE = "time_line";
+    public static final String SELECTED_YEAR = "selected_year";
+    public static final String COUNTRY_NAME = "country_name";
+    public static final String GDP_IN_COLOR = "gdp_in_color";
+    public static final String COUNTRY_BITMAP = "country_bitmap";
 
-    static String TAG = "地图图表";
-    static String FILE_NAME = "relative-pos.json";
-    static String WORLD_MAP = "World Map";
-    static int DURATION_ONE_YEAR = 30;
+    static final String TAG = "地图图表";
+    static final String FILE_NAME = "relative-pos.json";
+    static final String WORLD_MAP = "World Map";
+    static final int DURATION_ONE_YEAR = 30;
 
-    LifeExpValuesForPlotting plottingData;
-    LifeExpectancyValues rawData;
+    private LifeExpValuesForPlotting plottingData;
+    private LifeExpectancyValues rawData;
 
-    Context context;
+    private Context context;
 
-    Map<String, Bitmap> countriesBitmap;
-    Map<String, double[]> countriesPos;
-    Map<String, Bitmap> scaledCountriesBitmaps;
-    Bitmap popuGraph;
+    private Map<String, Bitmap> countriesBitmap;
+    private Map<String, double[]> countriesPos;
+    private Map<String, Bitmap> scaledCountriesBitmaps;
+    private Bitmap popuGraph;
 
-    int[] gdpInColor;
+    private int[] gdpInColor;
 
     private SurfaceHolder mHolder;
     private Canvas mCanvas;
     private boolean mIsDrawing;
 
-    int bgWidth;
-    int bgHeight;
+    private int bgWidth;
+    private int bgHeight;
 
-    int horizontalOffset = 0;
+    private int horizontalOffset = 0;
 
-    float popuGraphScale = 0;
+    private float popuGraphScale = 0;
 
-    Paint colorRulerPaint;
+    private Paint colorRulerPaint;
 
     public MapChart(Context context) {
         super(context);
@@ -541,7 +541,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         //canvas.drawRect(bgWidth - 200, 25, bgWidth - 100, bgHeight - 25, colorRulerPaint);
     }
 
-    static float resistance = 0.2f;
+    static final float resistance = 0.2f;
     //画出每一帧年份标尺的变化
     //注意该函数每秒运行30次
     private void drawYearRegulator(Canvas canvas){

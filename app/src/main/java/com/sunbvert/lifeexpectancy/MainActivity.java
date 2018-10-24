@@ -21,8 +21,8 @@ import java.util.Vector;
 
 public class MainActivity extends AppCompatActivity {
 
-    String TAG = "应用程序主界面";
-    String fileName = "life-expectancy.json";
+    static final String TAG = "应用程序主界面";
+    static final String fileName = "life-expectancy.json";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

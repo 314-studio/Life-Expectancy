@@ -33,14 +33,14 @@ import java.util.List;
 
 public class DisplayData extends AppCompatActivity {
 
-    static String TAG = "数据展示界面";
-    static String TAG2 = "线程：读取JOSN数据" ;
-    static String fileName = "life-expectancy.json";
-    static String UNITED_STATES = "United States";
+    private static final String TAG = "数据展示界面";
+    private static final String TAG2 = "线程：读取JOSN数据" ;
+    private static final String fileName = "life-expectancy.json";
+    private static final String UNITED_STATES = "United States";
 
-    static Bitmap COUNTRY_BITMAP;
+    public static Bitmap COUNTRY_BITMAP;
 
-    static int TITLE_HEIGHT = 250;
+    private static final int TITLE_HEIGHT = 250;
 
     LineChart chart;
     CountryInfoView mapView;

@@ -32,12 +32,14 @@ public class PopuAnimationUnit {
         this.colorPopuGreen = res.getColor(R.color.popu_green);
         this.colorPopuWhite = res.getColor(R.color.popu_white);
 
+        //缩放动画控制器
         scaleAnimator = ValueAnimator.ofFloat(0.1f, 1);
 
         if (colorScale < 0.3){
             colorScale = 0.3f;
         }
 
+        //颜色动画控制器
         colorAnimator = ValueAnimator.ofInt(0, (int) (colorScale * popuGraph.getHeight()));
 
         setAnimationListener();
@@ -75,15 +77,19 @@ public class PopuAnimationUnit {
         colorAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
+                //boundary是小人图片需要从下向上填充的距离
                 int boundary = (int) animation.getAnimatedValue();
+                //遍历小人图片
                 for (int i = popuGraph.getHeight() - 2; i > popuGraph.getHeight() - boundary; i--){
                     for (int j = 20; j < popuGraph.getWidth() - 20; j++){
+                        //如果遇到白色的像素点，则替换为绿色
                         int pixelColor = popuGraph.getPixel(j, i);
                         if (pixelColor == colorPopuWhite){
                             popuGraph.setPixel(j, i, colorPopuGreen);
                         }
                     }
                 }
+                //如果图片绘制完成，则结束所有动画
                 if(boundary >= (int) (colorScale * popuGraph.getHeight())){
                     isEnd = true;
                 }
