@@ -1,3 +1,2 @@
-°²×¿ÊÖ»ú¶ËÈí¼þ
-ÏîÄ¿ÇëÓÃAndroid Studio´ò¿ª
-ÏîÄ¿¸ºÔðÈË£ºËï´¨
+å®‰å“æ‰‹æœºç«¯è½¯ä»¶
+ä»£ç è¯·ç”¨Android Studioæ‰“å¼€
