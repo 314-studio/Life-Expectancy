@@ -230,7 +230,7 @@ public class MapChart extends SurfaceView implements SurfaceHolder.Callback, Run
         colorRulerHorMargin = 50;
         colorRulerPaint = new Paint();
         LinearGradient linearGradient = new LinearGradient(0, colorRulerMargin,
-                0, bgHeight - colorRulerMargin, new int[]{startColor, endColor},
+                0, bgHeight - colorRulerMargin, new int[]{endColor, startColor},
                 null, Shader.TileMode.CLAMP);
         colorRulerPaint.setShader(linearGradient);
 
